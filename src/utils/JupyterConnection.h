@@ -5,6 +5,7 @@
 
 #include <QProcess>
 #include <QMap>
+#include <cwchar>
 
 class NestedIPyKernel;
 
@@ -19,10 +20,15 @@ class JupyterConnection : public QObject
     Q_OBJECT
 
 public:
-    static JupyterConnection* getInstance();
+    static JupyterConnection *getInstance();
 
     JupyterConnection(QObject *parent = nullptr);
     ~JupyterConnection();
+
+    void setPythonHome(const QString pythonHome)
+    {
+        customPythonHome = pythonHome;
+    }
 
     void start();
     QString getUrl();
@@ -44,6 +50,11 @@ private:
     QMap<long, NestedIPyKernel *> kernels;
     long nextKernelId = 1;
 
+    QString customPythonHome;
+
+    wchar_t *pythonHome = nullptr;
+
+    void initPythonHome();
     void initPython();
     void createCutterJupyterModule();
 };

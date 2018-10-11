@@ -1,4 +1,8 @@
 #include <QShortcut>
+#include <QModelIndex>
+
+#include "MainWindow.h"
+#include "utils/Helpers.h"
 
 #include "VTablesWidget.h"
 #include "ui_VTablesWidget.h"
@@ -11,18 +15,19 @@ VTableModel::VTableModel(QList<VTableDescription> *vtables, QObject *parent)
 
 QModelIndex VTableModel::index(int row, int column, const QModelIndex &parent) const
 {
-    return createIndex(row, column, (quintptr) parent.isValid()? parent.row() : -1);
+    return createIndex(row, column, (quintptr) parent.isValid() ? parent.row() : -1);
 }
 
 QModelIndex VTableModel::parent(const QModelIndex &index) const
 {
-    return index.isValid() && index.internalId() != (quintptr) -1 ?
-                this->index(index.internalId(), index.column()) : QModelIndex();
+    return index.isValid() && index.internalId() != (quintptr) - 1 ?
+           this->index(index.internalId(), index.column()) : QModelIndex();
 }
 
 int VTableModel::rowCount(const QModelIndex &parent) const
 {
-    return parent.isValid()? (parent.parent().isValid()? 0 : vtables->at(parent.row()).methods.count()) : vtables->count();
+    return parent.isValid() ? (parent.parent().isValid() ? 0 : vtables->at(
+                                   parent.row()).methods.count()) : vtables->count();
 }
 
 int VTableModel::columnCount(const QModelIndex &) const
@@ -33,38 +38,36 @@ int VTableModel::columnCount(const QModelIndex &) const
 QVariant VTableModel::data(const QModelIndex &index, int role) const
 {
     QModelIndex parent = index.parent();
-    if(parent.isValid())
-    {
+    if (parent.isValid()) {
         const ClassMethodDescription &res = vtables->at(parent.row()).methods.at(index.row());
-        switch (role)
-        {
+        switch (role) {
         case Qt::DisplayRole:
-            switch(index.column())
-            {
+            switch (index.column()) {
             case NAME:
                 return res.name;
             case ADDRESS:
                 return RAddressString(res.addr);
-            default:
-                break;
             }
+            break;
+        case VTableDescriptionRole:
+            return QVariant::fromValue(res);
         default:
             break;
         }
-    }
-    else
-        switch(role)
-        {
+    } else
+        switch (role) {
         case Qt::DisplayRole:
-            switch(index.column())
-            {
+            switch (index.column()) {
             case NAME:
                 return tr("VTable ") + QString::number(index.row() + 1);
             case ADDRESS:
                 return RAddressString(vtables->at(index.row()).addr);
-            default:
-                break;
             }
+            break;
+        case VTableDescriptionRole: {
+            const VTableDescription &res = vtables->at(index.row());
+            return QVariant::fromValue(res);
+        }
         default:
             break;
         }
@@ -73,11 +76,9 @@ QVariant VTableModel::data(const QModelIndex &index, int role) const
 
 QVariant VTableModel::headerData(int section, Qt::Orientation, int role) const
 {
-    switch(role)
-    {
+    switch (role) {
     case Qt::DisplayRole:
-        switch(section)
-        {
+        switch (section) {
         case NAME:
             return tr("Name");
         case ADDRESS:
@@ -91,17 +92,8 @@ QVariant VTableModel::headerData(int section, Qt::Orientation, int role) const
     return QVariant();
 }
 
-void VTableModel::beginReload()
-{
-    beginResetModel();
-}
 
-void VTableModel::endReload()
-{
-    endResetModel();
-}
-
-VTableSortFilterProxyModel::VTableSortFilterProxyModel(VTableModel *model, QObject* parent)
+VTableSortFilterProxyModel::VTableSortFilterProxyModel(VTableModel *model, QObject *parent)
     : QSortFilterProxyModel(parent)
 {
     setSourceModel(model);
@@ -113,20 +105,20 @@ VTableSortFilterProxyModel::VTableSortFilterProxyModel(VTableModel *model, QObje
 #endif
 }
 
-bool VTableSortFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const
+bool VTableSortFilterProxyModel::filterAcceptsRow(int source_row,
+                                                  const QModelIndex &source_parent) const
 {
-    if(QSortFilterProxyModel::filterAcceptsRow(source_row, source_parent))
+    if (QSortFilterProxyModel::filterAcceptsRow(source_row, source_parent))
         return true;
-    if(source_parent.isValid())
+    if (source_parent.isValid())
         return QSortFilterProxyModel::filterAcceptsRow(source_parent.row(), QModelIndex());
 #if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
-    else
-    {
-        QAbstractItemModel* const model = sourceModel();
+    else {
+        QAbstractItemModel *const model = sourceModel();
         const QModelIndex source  = model->index(source_row, 0, QModelIndex());
         const int rows = model->rowCount(source);
-        for(int i = 0; i < rows; ++i)
-            if(QSortFilterProxyModel::filterAcceptsRow(i, source))
+        for (int i = 0; i < rows; ++i)
+            if (QSortFilterProxyModel::filterAcceptsRow(i, source))
                 return true;
     }
 #endif
@@ -134,11 +126,15 @@ bool VTableSortFilterProxyModel::filterAcceptsRow(int source_row, const QModelIn
 }
 
 
-VTablesWidget::VTablesWidget(QWidget *parent) :
-    QDockWidget(parent),
-    ui(new Ui::VTablesWidget)
+VTablesWidget::VTablesWidget(MainWindow *main, QAction *action) :
+    CutterDockWidget(main, action),
+    ui(new Ui::VTablesWidget),
+    tree(new CutterTreeWidget(this))
 {
     ui->setupUi(this);
+
+    // Add Status Bar footer
+    tree->addStatusBar(ui->verticalLayout);
 
     model = new VTableModel(&vtables, this);
     proxy = new VTableSortFilterProxyModel(model);
@@ -155,9 +151,14 @@ VTablesWidget::VTablesWidget(QWidget *parent) :
     connect(search_shortcut, &QShortcut::activated, ui->quickFilterView, &QuickFilterView::showFilter);
     search_shortcut->setContext(Qt::WidgetWithChildrenShortcut);
 
-    connect(ui->quickFilterView, SIGNAL(filterTextChanged(const QString&)), proxy, SLOT(setFilterWildcard(const QString &)));
+    connect(ui->quickFilterView, SIGNAL(filterTextChanged(const QString &)), proxy,
+            SLOT(setFilterWildcard(const QString &)));
     connect(ui->quickFilterView, SIGNAL(filterClosed()), ui->vTableTreeView, SLOT(setFocus()));
 
+    connect(ui->quickFilterView, &QuickFilterView::filterTextChanged, this, [this] {
+        tree->showItemsNumber(proxy->rowCount());
+    });
+    
     connect(Core(), SIGNAL(refreshAll()), this, SLOT(refreshVTables()));
 }
 
@@ -167,13 +168,27 @@ VTablesWidget::~VTablesWidget()
 
 void VTablesWidget::refreshVTables()
 {
-    model->beginReload();
-    vtables = CutterCore::getInstance()->getAllVTables();
-    model->endReload();
+    model->beginResetModel();
+    vtables = Core()->getAllVTables();
+    model->endResetModel();
 
-    ui->vTableTreeView->resizeColumnToContents(0);
-    ui->vTableTreeView->resizeColumnToContents(1);
-    ui->vTableTreeView->resizeColumnToContents(2);
+    qhelpers::adjustColumns(ui->vTableTreeView, 3, 0);
 
     ui->vTableTreeView->setColumnWidth(0, 200);
+
+    tree->showItemsNumber(proxy->rowCount());
+}
+
+void VTablesWidget::on_vTableTreeView_doubleClicked(const QModelIndex &index)
+{
+    if (!index.isValid())
+        return;
+
+    QModelIndex parent = index.parent();
+    if (parent.isValid())
+        Core()->seek(index.data(
+                         VTableModel::VTableDescriptionRole).value<ClassMethodDescription>().addr);
+    else
+        Core()->seek(index.data(
+                         VTableModel::VTableDescriptionRole).value<VTableDescription>().addr);
 }

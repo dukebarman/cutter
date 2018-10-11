@@ -5,116 +5,213 @@
 #include "dialogs/FlagDialog.h"
 #include "dialogs/RenameDialog.h"
 #include "dialogs/XrefsDialog.h"
+#include "dialogs/SetFunctionVarTypes.h"
+#include "dialogs/SetToDataDialog.h"
 #include <QtCore>
 #include <QShortcut>
 #include <QJsonArray>
+#include <QClipboard>
+#include <QApplication>
 
 DisassemblyContextMenu::DisassemblyContextMenu(QWidget *parent)
     :   QMenu(parent),
         offset(0),
-        canCopy(false),
-        actionEditInstruction(this),
-        actionEditBytes(this),
-        actionCopy(this),
-        actionAddComment(this),
-        actionAddFlag(this),
-        actionCreateFunction(this),
-        actionRename(this),
-        actionRenameUsedHere(this),
-        actionXRefs(this),
-        actionDisplayOptions(this),
-        actionDeleteComment(this),
-        actionDeleteFlag(this),
-        actionDeleteFunction(this),
-        actionSetBaseBinary(this),
-        actionSetBaseOctal(this),
-        actionSetBaseDecimal(this),
-        actionSetBaseHexadecimal(this),
-        actionSetBasePort(this),
-        actionSetBaseIPAddr(this),
-        actionSetBaseSyscall(this),
-        actionSetBaseString(this),
-        actionSetBits16(this),
-        actionSetBits32(this),
-        actionSetBits64(this)
+        canCopy(false)
 {
-    createAction(&actionCopy, tr("Copy"), getCopySequence(), SLOT(on_actionCopy_triggered()));
+    initAction(&actionCopy, tr("Copy"), SLOT(on_actionCopy_triggered()), getCopySequence());
+    addAction(&actionCopy);
+
     copySeparator = addSeparator();
-    createAction(&actionAddComment, tr("Add Comment"), getCommentSequence(), SLOT(on_actionAddComment_triggered()));
-    createAction(&actionAddFlag, tr("Add Flag"), getAddFlagSequence(), SLOT(on_actionAddFlag_triggered()));
-    createAction(&actionCreateFunction, tr("Create Function"), {}, SLOT(on_actionCreateFunction_triggered()));
-    createAction(&actionRename, tr("Rename"), getRenameSequence(), SLOT(on_actionRename_triggered()));
-    createAction(&actionRenameUsedHere, "Rename Flag/Fcn/Var Used Here", getRenameUsedHereSequence(), SLOT(on_actionRenameUsedHere_triggered()));
 
-    createAction(&actionDeleteComment, tr("Delete comment"), {}, SLOT(on_actionDeleteComment_triggered()));
-    createAction(&actionDeleteFlag, tr("Delete flag"), {}, SLOT(on_actionDeleteFlag_triggered()));
-    createAction(&actionDeleteFunction, tr("Undefine function"), {}, SLOT(on_actionDeleteFunction_triggered()));
+    initAction(&actionCopyAddr, tr("Copy address"), SLOT(on_actionCopyAddr_triggered()));
+    addAction(&actionCopyAddr);
 
-    setBaseMenu = new QMenu(tr("Set Immediate Base to..."), this);
-    setBaseMenuAction = addMenu(setBaseMenu);
-    actionSetBaseBinary.setText(tr("Binary"));
-    setBaseMenu->addAction(&actionSetBaseBinary);
-    actionSetBaseOctal.setText(tr("Octal"));
-    setBaseMenu->addAction(&actionSetBaseOctal);
-    actionSetBaseDecimal.setText(tr("Decimal"));
-    setBaseMenu->addAction(&actionSetBaseDecimal);
-    actionSetBaseHexadecimal.setText(tr("Hexadecimal"));
-    setBaseMenu->addAction(&actionSetBaseHexadecimal);
-    actionSetBasePort.setText(tr("Network Port"));
-    setBaseMenu->addAction(&actionSetBasePort);
-    actionSetBaseIPAddr.setText(tr("IP Address"));
-    setBaseMenu->addAction(&actionSetBaseIPAddr);
-    actionSetBaseSyscall.setText(tr("Syscall"));
-    setBaseMenu->addAction(&actionSetBaseSyscall);
-    actionSetBaseString.setText(tr("String"));
-    setBaseMenu->addAction(&actionSetBaseString);
+    initAction(&actionAddComment, tr("Add Comment"),
+               SLOT(on_actionAddComment_triggered()), getCommentSequence());
+    addAction(&actionAddComment);
 
-    setBitsMenu = new QMenu(tr("Set current bits to..."), this);
-    setBitsMenuAction = addMenu(setBitsMenu);
-    actionSetBits16.setText("16");
-    setBitsMenu->addAction(&actionSetBits16);
-    actionSetBits32.setText("32");
-    setBitsMenu->addAction(&actionSetBits32);
-    actionSetBits64.setText("64");
-    setBitsMenu->addAction(&actionSetBits64);
+    initAction(&actionAddFlag, tr("Add Flag"),
+               SLOT(on_actionAddFlag_triggered()), getAddFlagSequence());
+    addAction(&actionAddFlag);
+
+    initAction(&actionRename, tr("Rename"),
+               SLOT(on_actionRename_triggered()), getRenameSequence());
+    addAction(&actionRename);
+
+    initAction(&actionRenameUsedHere, tr("Rename Flag/Fcn/Var Used Here"),
+               SLOT(on_actionRenameUsedHere_triggered()), getRenameUsedHereSequence());
+    addAction(&actionRenameUsedHere);
+
+    initAction(&actionSetFunctionVarTypes, tr("Re-type function local vars"),
+               SLOT(on_actionSetFunctionVarTypes_triggered()), getRetypeSequence());
+    addAction(&actionSetFunctionVarTypes);
+
+    initAction(&actionDeleteComment, tr("Delete comment"), SLOT(on_actionDeleteComment_triggered()));
+    addAction(&actionDeleteComment);
+
+    initAction(&actionDeleteFlag, tr("Delete flag"), SLOT(on_actionDeleteFlag_triggered()));
+    addAction(&actionDeleteFlag);
+
+    initAction(&actionDeleteFunction, tr("Undefine function"),
+               SLOT(on_actionDeleteFunction_triggered()));
+    addAction(&actionDeleteFunction);
+
+    initAction(&actionAnalyzeFunction, tr("Define function here..."),
+               SLOT(on_actionAnalyzeFunction_triggered()));
+    addAction(&actionAnalyzeFunction);
+
+    addSetBaseMenu();
+
+    addSetBitsMenu();
+
+    initAction(&actionSetToCode, tr("Set to Code"),
+               SLOT(on_actionSetToCode_triggered()), getSetToCodeSequence());
+    addAction(&actionSetToCode);
+
+    addSetToDataMenu();
 
     addSeparator();
-    createAction(&actionXRefs, tr("Show X-Refs"), getXRefSequence(), SLOT(on_actionXRefs_triggered()));
-    createAction(&actionDisplayOptions, tr("Show Options"), getDisplayOptionsSequence(), SLOT(on_actionDisplayOptions_triggered()));
+
+    initAction(&actionXRefs, tr("Show X-Refs"),
+               SLOT(on_actionXRefs_triggered()), getXRefSequence());
+    addAction(&actionXRefs);
+
+    initAction(&actionDisplayOptions, tr("Show Options"),
+               SLOT(on_actionDisplayOptions_triggered()), getDisplayOptionsSequence());
 
     addSeparator();
-    editMenu = new QMenu(tr("Edit"), this);
-    editMenuAction = addMenu(editMenu);
-    actionEditInstruction.setText(tr("Instruction"));
-    editMenu->addAction(&actionEditInstruction);
-    actionEditBytes.setText(tr("Bytes"));
-    editMenu->addAction(&actionEditBytes);
 
-    connect(&actionEditInstruction, SIGNAL(triggered(bool)), this, SLOT(on_actionEditInstruction_triggered()));
-    connect(&actionEditBytes, SIGNAL(triggered(bool)), this, SLOT(on_actionEditBytes_triggered()));
+    addEditMenu();
 
-    connect(&actionSetBaseBinary, SIGNAL(triggered(bool)), this, SLOT(on_actionSetBaseBinary_triggered()));
-    connect(&actionSetBaseOctal, SIGNAL(triggered(bool)), this, SLOT(on_actionSetBaseOctal_triggered()));
-    connect(&actionSetBaseDecimal, SIGNAL(triggered(bool)), this, SLOT(on_actionSetBaseDecimal_triggered()));
-    connect(&actionSetBaseHexadecimal, SIGNAL(triggered(bool)), this, SLOT(on_actionSetBaseHexadecimal_triggered()));
-    connect(&actionSetBasePort, SIGNAL(triggered(bool)), this, SLOT(on_actionSetBasePort_triggered()));
-    connect(&actionSetBaseIPAddr, SIGNAL(triggered(bool)), this, SLOT(on_actionSetBaseIPAddr_triggered()));
-    connect(&actionSetBaseSyscall, SIGNAL(triggered(bool)), this, SLOT(on_actionSetBaseSyscall_triggered()));
-    connect(&actionSetBaseString, SIGNAL(triggered(bool)), this, SLOT(on_actionSetBaseString_triggered()));
+    addSeparator();
 
-    connect(&actionSetBits16, SIGNAL(triggered(bool)), this, SLOT(on_actionSetBits16_triggered()));
-    connect(&actionSetBits32, SIGNAL(triggered(bool)), this, SLOT(on_actionSetBits32_triggered()));
-    connect(&actionSetBits64, SIGNAL(triggered(bool)), this, SLOT(on_actionSetBits64_triggered()));
+    addDebugMenu();
 
-    connect(this, SIGNAL(aboutToShow()), this, SLOT(aboutToShowSlot()));
+    connect(this, &DisassemblyContextMenu::aboutToShow,
+            this, &DisassemblyContextMenu::aboutToShowSlot);
 }
 
 DisassemblyContextMenu::~DisassemblyContextMenu()
 {
-    for(QAction *action : anonymousActions)
-    {
+    for (QAction *action : anonymousActions) {
         delete action;
     }
+}
+
+void DisassemblyContextMenu::addSetBaseMenu()
+{
+    setBaseMenu = addMenu(tr("Set Immediate Base to..."));
+
+    initAction(&actionSetBaseBinary, tr("Binary"));
+    setBaseMenu->addAction(&actionSetBaseBinary);
+    connect(&actionSetBaseBinary, &QAction::triggered, this, [this] { setBase("b"); });
+
+    initAction(&actionSetBaseOctal, tr("Octal"));
+    setBaseMenu->addAction(&actionSetBaseOctal);
+    connect(&actionSetBaseOctal, &QAction::triggered, this, [this] { setBase("o"); });
+
+    initAction(&actionSetBaseDecimal, tr("Decimal"));
+    setBaseMenu->addAction(&actionSetBaseDecimal);
+    connect(&actionSetBaseDecimal, &QAction::triggered, this, [this] { setBase("d"); });
+
+    initAction(&actionSetBaseHexadecimal, tr("Hexadecimal"));
+    setBaseMenu->addAction(&actionSetBaseHexadecimal);
+    connect(&actionSetBaseHexadecimal, &QAction::triggered, this, [this] { setBase("h"); });
+
+    initAction(&actionSetBasePort, tr("Network Port"));
+    setBaseMenu->addAction(&actionSetBasePort);
+    connect(&actionSetBasePort, &QAction::triggered, this, [this] { setBase("p"); });
+
+    initAction(&actionSetBaseIPAddr, tr("IP Address"));
+    setBaseMenu->addAction(&actionSetBaseIPAddr);
+    connect(&actionSetBaseIPAddr, &QAction::triggered, this, [this] { setBase("i"); });
+
+    initAction(&actionSetBaseSyscall, tr("Syscall"));
+    setBaseMenu->addAction(&actionSetBaseSyscall);
+    connect(&actionSetBaseSyscall, &QAction::triggered, this, [this] { setBase("S"); });
+
+    initAction(&actionSetBaseString, tr("String"));
+    setBaseMenu->addAction(&actionSetBaseString);
+    connect(&actionSetBaseString, &QAction::triggered, this, [this] { setBase("s"); });
+}
+
+void DisassemblyContextMenu::addSetBitsMenu()
+{
+    setBitsMenu = addMenu(tr("Set current bits to..."));
+
+    initAction(&actionSetBits16, "16");
+    setBitsMenu->addAction(&actionSetBits16);
+    connect(&actionSetBits16, &QAction::triggered, this, [this] { setBits(16); });
+
+    initAction(&actionSetBits32, "32");
+    setBitsMenu->addAction(&actionSetBits32);
+    connect(&actionSetBits32, &QAction::triggered, this, [this] { setBits(32); });
+
+    initAction(&actionSetBits64, "64");
+    setBitsMenu->addAction(&actionSetBits64);
+    connect(&actionSetBits64, &QAction::triggered, this, [this] { setBits(64); });
+}
+
+void DisassemblyContextMenu::addSetToDataMenu()
+{
+    setToDataMenu = addMenu(tr("Set to Data..."));
+
+    initAction(&actionSetToDataByte, tr("Byte"));
+    setToDataMenu->addAction(&actionSetToDataByte);
+    connect(&actionSetToDataByte, &QAction::triggered, this, [this] { setToData(1); });
+
+    initAction(&actionSetToDataWord, tr("Word"));
+    setToDataMenu->addAction(&actionSetToDataWord);
+    connect(&actionSetToDataWord, &QAction::triggered, this, [this] { setToData(2); });
+
+    initAction(&actionSetToDataDword, tr("Dword"));
+    setToDataMenu->addAction(&actionSetToDataDword);
+    connect(&actionSetToDataDword, &QAction::triggered, this, [this] { setToData(4); });
+
+    initAction(&actionSetToDataQword, tr("Qword"));
+    setToDataMenu->addAction(&actionSetToDataQword);
+    connect(&actionSetToDataQword, &QAction::triggered, this, [this] { setToData(8); });
+
+    initAction(&actionSetToDataEx, "...",
+               SLOT(on_actionSetToDataEx_triggered()), getSetToDataExSequence());
+    setToDataMenu->addAction(&actionSetToDataEx);
+
+    auto switchAction = new QAction();
+    initAction(switchAction, "Switch Data",
+               SLOT(on_actionSetToData_triggered()), getSetToDataSequence());
+}
+
+void DisassemblyContextMenu::addEditMenu()
+{
+    editMenu = addMenu(tr("Edit"));
+
+    initAction(&actionEditInstruction, tr("Instruction"), SLOT(on_actionEditInstruction_triggered()));
+    editMenu->addAction(&actionEditInstruction);
+
+    initAction(&actionNopInstruction, tr("Nop Instruction"), SLOT(on_actionNopInstruction_triggered()));
+    editMenu->addAction(&actionNopInstruction);
+
+    initAction(&actionEditBytes, tr("Bytes"), SLOT(on_actionEditBytes_triggered()));
+    editMenu->addAction(&actionEditBytes);
+
+    initAction(&actionJmpReverse, tr("Reverse Jump"), SLOT(on_actionJmpReverse_triggered()));
+    editMenu->addAction(&actionJmpReverse);
+}
+
+void DisassemblyContextMenu::addDebugMenu()
+{
+    debugMenu = addMenu(tr("Debug"));
+
+    initAction(&actionAddBreakpoint, tr("Add/remove breakpoint"),
+               SLOT(on_actionAddBreakpoint_triggered()), getAddBPSequence());
+    debugMenu->addAction(&actionAddBreakpoint);
+
+    initAction(&actionContinueUntil, tr("Continue until line"),
+               SLOT(on_actionContinueUntil_triggered()));
+    debugMenu->addAction(&actionContinueUntil);
+
+    initAction(&actionSetPC, "Set PC", SLOT(on_actionSetPC_triggered()));
+    debugMenu->addAction(&actionSetPC);
 }
 
 void DisassemblyContextMenu::setOffset(RVA offset)
@@ -130,22 +227,20 @@ void DisassemblyContextMenu::setCanCopy(bool enabled)
 void DisassemblyContextMenu::aboutToShowSlot()
 {
     // check if set immediate base menu makes sense
-    QJsonObject instObject = Core()->cmdj("aoj @ " + QString::number(offset)).array().first().toObject();
+    QJsonObject instObject = Core()->cmdj("aoj @ " + QString::number(
+                                              offset)).array().first().toObject();
     auto keys = instObject.keys();
     bool immBase = keys.contains("val") || keys.contains("ptr");
-    setBaseMenuAction->setVisible(immBase);
-    setBitsMenuAction->setVisible(true);
+    setBaseMenu->menuAction()->setVisible(immBase);
+    setBitsMenu->menuAction()->setVisible(true);
 
-    actionCreateFunction.setVisible(true);
+    actionAnalyzeFunction.setVisible(true);
 
     QString comment = Core()->cmd("CC." + RAddressString(offset));
-    if (comment.isNull() || comment.isEmpty())
-    {
+    if (comment.isNull() || comment.isEmpty()) {
         actionDeleteComment.setVisible(false);
         actionAddComment.setText(tr("Add Comment"));
-    }
-    else
-    {
+    } else {
         actionDeleteComment.setVisible(true);
         actionAddComment.setText(tr("Edit Comment"));
     }
@@ -156,48 +251,57 @@ void DisassemblyContextMenu::aboutToShowSlot()
 
     RCore *core = Core()->core();
     RAnalFunction *fcn = r_anal_get_fcn_at (core->anal, offset, R_ANAL_FCN_TYPE_NULL);
+    RAnalFunction *in_fcn = Core()->functionAt(offset);
     RFlagItem *f = r_flag_get_i (core->flags, offset);
 
     actionDeleteFlag.setVisible(f ? true : false);
     actionDeleteFunction.setVisible(fcn ? true : false);
 
-    if (fcn)
-    {
-        actionCreateFunction.setVisible(false);
+    if (fcn) {
+        actionAnalyzeFunction.setVisible(false);
         actionRename.setVisible(true);
         actionRename.setText(tr("Rename function \"%1\"").arg(fcn->name));
-    }
-    else if (f)
-    {
+    } else if (f) {
         actionRename.setVisible(true);
         actionRename.setText(tr("Rename flag \"%1\"").arg(f->name));
+    } else {
+        actionRename.setVisible(false);
+    }
+
+    //only show retype for local vars if in a function
+    if(in_fcn)
+    {
+        actionSetFunctionVarTypes.setVisible(true);
     }
     else
     {
-        actionRename.setVisible(false);
+        actionSetFunctionVarTypes.setVisible(false);
     }
 
 
     // only show "rename X used here" if there is something to rename
     QJsonArray thingUsedHereArray = Core()->cmdj("anj @ " + QString::number(offset)).array();
-    if (!thingUsedHereArray.isEmpty())
-    {
+    if (!thingUsedHereArray.isEmpty()) {
         actionRenameUsedHere.setVisible(true);
         QJsonObject thingUsedHere = thingUsedHereArray.first().toObject();
-        if (thingUsedHere["type"] == "address")
-        {
+        if (thingUsedHere["type"] == "address") {
             RVA offset = thingUsedHere["offset"].toVariant().toULongLong();
             actionRenameUsedHere.setText(tr("Add flag at %1 (used here)").arg(RAddressString(offset)));
-        }
-        else
-        {
+        } else {
             actionRenameUsedHere.setText(tr("Rename \"%1\" (used here)").arg(thingUsedHere["name"].toString()));
         }
-    }
-    else
-    {
+    } else {
         actionRenameUsedHere.setVisible(false);
     }
+
+    // decide to show Reverse jmp option
+    showReverseJmpQuery();
+
+    // only show debug options if we are currently debugging
+    debugMenu->menuAction()->setVisible(Core()->currentlyDebugging);
+    QString progCounterName = Core()->getRegisterName("PC");
+    actionSetPC.setText("Set " + progCounterName + " here");
+
 }
 
 QKeySequence DisassemblyContextMenu::getCopySequence() const
@@ -208,6 +312,21 @@ QKeySequence DisassemblyContextMenu::getCopySequence() const
 QKeySequence DisassemblyContextMenu::getCommentSequence() const
 {
     return {Qt::Key_Semicolon};
+}
+
+QKeySequence DisassemblyContextMenu::getSetToCodeSequence() const
+{
+    return {Qt::Key_C};
+}
+
+QKeySequence DisassemblyContextMenu::getSetToDataSequence() const
+{
+    return {Qt::Key_D};
+}
+
+QKeySequence DisassemblyContextMenu::getSetToDataExSequence() const
+{
+    return {Qt::Key_Asterisk};
 }
 
 QKeySequence DisassemblyContextMenu::getAddFlagSequence() const
@@ -225,6 +344,11 @@ QKeySequence DisassemblyContextMenu::getRenameUsedHereSequence() const
     return {Qt::SHIFT + Qt::Key_N};
 }
 
+QKeySequence DisassemblyContextMenu::getRetypeSequence() const
+{
+     return {Qt::Key_Y};
+}
+
 QKeySequence DisassemblyContextMenu::getXRefSequence() const
 {
     return {Qt::Key_X};
@@ -235,39 +359,112 @@ QKeySequence DisassemblyContextMenu::getDisplayOptionsSequence() const
     return {}; //TODO insert correct sequence
 }
 
+QList<QKeySequence> DisassemblyContextMenu::getAddBPSequence() const
+{
+    return {Qt::Key_F2, Qt::CTRL + Qt::Key_B};
+}
+
 void DisassemblyContextMenu::on_actionEditInstruction_triggered()
 {
-    EditInstructionDialog *e = new EditInstructionDialog(this);
+    EditInstructionDialog *e = new EditInstructionDialog(this, false);
     e->setWindowTitle(tr("Edit Instruction at %1").arg(RAddressString(offset)));
 
-    QString oldInstruction = Core()->cmdj("aoj").array().first().toObject()["opcode"].toString();
-    e->setInstruction(oldInstruction);
+    QString oldInstructionOpcode = Core()->getInstructionOpcode(offset);
+    QString oldInstructionBytes = Core()->getInstructionBytes(offset);
 
-    if (e->exec()){}
-    {
-        QString instruction = e->getInstruction();
-        if (instruction != oldInstruction)
-        {
-            Core()->editInstruction(offset, instruction);
+    e->setInstruction(oldInstructionOpcode);
+
+    if (e->exec()) {
+        QString userInstructionOpcode = e->getInstruction();
+        if (userInstructionOpcode != oldInstructionOpcode) {
+            Core()->editInstruction(offset, userInstructionOpcode);
+
+            // check if the write failed
+            auto newInstructionBytes = Core()->getInstructionBytes(offset);
+            if (newInstructionBytes == oldInstructionBytes) {
+                writeFailed();
+            }
         }
+    }
+}
+
+void DisassemblyContextMenu::on_actionNopInstruction_triggered()
+{
+    QString oldBytes = Core()->getInstructionBytes(offset);
+
+    Core()->nopInstruction(offset);
+
+    QString newBytes = Core()->getInstructionBytes(offset);
+    if (oldBytes == newBytes) {
+        writeFailed();
+    }
+}
+
+void DisassemblyContextMenu::showReverseJmpQuery()
+{
+    QString type;
+
+    QJsonArray array = Core()->cmdj("pdj 1 @ " + RAddressString(offset)).array();
+    if (array.isEmpty()) {
+        return;
+    }
+
+    type = array.first().toObject()["type"].toString();
+    if (type == "cjmp") {
+        actionJmpReverse.setVisible(true);
+    } else {
+        actionJmpReverse.setVisible(false);
+    }
+}
+
+void DisassemblyContextMenu::on_actionJmpReverse_triggered()
+{
+    QString oldBytes = Core()->getInstructionBytes(offset);
+
+    Core()->jmpReverse(offset);
+
+    QString newBytes = Core()->getInstructionBytes(offset);
+    if (oldBytes == newBytes) {
+        writeFailed();
     }
 }
 
 void DisassemblyContextMenu::on_actionEditBytes_triggered()
 {
-    EditInstructionDialog *e = new EditInstructionDialog(this);
+    EditInstructionDialog *e = new EditInstructionDialog(this, true);
     e->setWindowTitle(tr("Edit Bytes at %1").arg(RAddressString(offset)));
 
-    QString oldBytes = Core()->cmdj("aoj").array().first().toObject()["bytes"].toString();
+    QString oldBytes = Core()->getInstructionBytes(offset);
     e->setInstruction(oldBytes);
 
-    if (e->exec()){}
-    {
+    if (e->exec()) {
         QString bytes = e->getInstruction();
-        if (bytes != oldBytes)
-        {
+        if (bytes != oldBytes) {
             Core()->editBytes(offset, bytes);
+
+            QString newBytes = Core()->getInstructionBytes(offset);
+            if (oldBytes == newBytes) {
+                writeFailed();
+            }
         }
+    }
+}
+
+void DisassemblyContextMenu::writeFailed()
+{
+    QMessageBox msgBox;
+    msgBox.setIcon(QMessageBox::Icon::Critical);
+    msgBox.setWindowTitle(tr("Write error"));
+    msgBox.setText(tr("Unable to complete write operation. Consider opening in write mode."));
+    msgBox.addButton(tr("OK"), QMessageBox::NoRole);
+    QAbstractButton *reopenButton = msgBox.addButton(tr("Reopen in write mode"), QMessageBox::YesRole);
+
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == reopenButton) {
+        QMessageBox::warning(this, "File reopened in write mode",
+                             "WARNING: Any chages will now be commited to disk");
+        Core()->cmd("oo+");
     }
 }
 
@@ -276,43 +473,58 @@ void DisassemblyContextMenu::on_actionCopy_triggered()
     emit copy();
 }
 
+void DisassemblyContextMenu::on_actionCopyAddr_triggered()
+{
+    QClipboard *clipboard = QApplication::clipboard();
+    clipboard->setText(RAddressString(offset));
+}
+
+void DisassemblyContextMenu::on_actionAddBreakpoint_triggered()
+{
+    Core()->toggleBreakpoint(offset);
+}
+
+void DisassemblyContextMenu::on_actionContinueUntil_triggered()
+{
+    Core()->continueUntilDebug(RAddressString(offset));
+}
+
+void DisassemblyContextMenu::on_actionSetPC_triggered()
+{
+    QString progCounterName = Core()->getRegisterName("PC");
+    Core()->setRegister(progCounterName, RAddressString(offset));
+}
+
 void DisassemblyContextMenu::on_actionAddComment_triggered()
 {
     QString oldComment = Core()->cmd("CC." + RAddressString(offset));
     // Remove newline at the end added by cmd
-    oldComment.remove(oldComment.length()-1, 1);
+    oldComment.remove(oldComment.length() - 1, 1);
     CommentsDialog *c = new CommentsDialog(this);
 
-    if (oldComment.isNull() || oldComment.isEmpty())
-    {
+    if (oldComment.isNull() || oldComment.isEmpty()) {
         c->setWindowTitle(tr("Add Comment at %1").arg(RAddressString(offset)));
-    }
-    else
-    {
+    } else {
         c->setWindowTitle(tr("Edit Comment at %1").arg(RAddressString(offset)));
     }
 
     c->setComment(oldComment);
-    if (c->exec())
-    {
+    if (c->exec()) {
         QString comment = c->getComment();
-        if (comment.isEmpty())
-        {
+        if (comment.isEmpty()) {
             Core()->delComment(offset);
-        }
-        else
-        {
+        } else {
             Core()->setComment(offset, comment);
         }
     }
 }
 
-void DisassemblyContextMenu::on_actionCreateFunction_triggered()
+void DisassemblyContextMenu::on_actionAnalyzeFunction_triggered()
 {
     RenameDialog *dialog = new RenameDialog(this);
-    dialog->setWindowTitle(tr("Add function at %1").arg(RAddressString(offset)));
-    if(dialog->exec())
-    {
+    dialog->setWindowTitle(tr("Analyze function at %1").arg(RAddressString(offset)));
+    dialog->setPlaceholderText(tr("Function name"));
+    if (dialog->exec()) {
         QString function_name = dialog->getName();
         Core()->createFunctionAt(offset, function_name);
     }
@@ -332,30 +544,23 @@ void DisassemblyContextMenu::on_actionRename_triggered()
 
     RAnalFunction *fcn = r_anal_get_fcn_at (core->anal, offset, R_ANAL_FCN_TYPE_NULL);
     RFlagItem *f = r_flag_get_i (core->flags, offset);
-    if (fcn)
-    {
+    if (fcn) {
         /* Rename function */
         dialog->setWindowTitle(tr("Rename function %1").arg(fcn->name));
         dialog->setName(fcn->name);
-        if (dialog->exec())
-        {
+        if (dialog->exec()) {
             QString new_name = dialog->getName();
             Core()->renameFunction(fcn->name, new_name);
         }
-    }
-    else if (f)
-    {
+    } else if (f) {
         /* Rename current flag */
         dialog->setWindowTitle(tr("Rename flag %1").arg(f->name));
         dialog->setName(f->name);
-        if (dialog->exec())
-        {
+        if (dialog->exec()) {
             QString new_name = dialog->getName();
             Core()->renameFlag(f->name, new_name);
         }
-    }
-    else
-    {
+    } else {
         return;
     }
 }
@@ -363,8 +568,7 @@ void DisassemblyContextMenu::on_actionRename_triggered()
 void DisassemblyContextMenu::on_actionRenameUsedHere_triggered()
 {
     QJsonArray array = Core()->cmdj("anj @ " + QString::number(offset)).array();
-    if (array.isEmpty())
-    {
+    if (array.isEmpty()) {
         return;
     }
 
@@ -375,40 +579,49 @@ void DisassemblyContextMenu::on_actionRenameUsedHere_triggered()
 
     QString oldName;
 
-    if (type == "address")
-    {
+    if (type == "address") {
         RVA offset = thingUsedHere["offset"].toVariant().toULongLong();
         dialog->setWindowTitle(tr("Add flag at %1").arg(RAddressString(offset)));
         dialog->setName("label." + QString::number(offset, 16));
-    }
-    else
-    {
+    } else {
         oldName = thingUsedHere.value("name").toString();
         dialog->setWindowTitle(tr("Rename %1").arg(oldName));
         dialog->setName(oldName);
     }
 
-    if (dialog->exec())
-    {
+    if (dialog->exec()) {
         QString newName = dialog->getName().trimmed();
-        if (!newName.isEmpty())
-        {
+        if (!newName.isEmpty()) {
             Core()->cmd("an " + newName + " @ " + QString::number(offset));
 
-            if (type == "address" || type == "flag")
-            {
+            if (type == "address" || type == "flag") {
                 Core()->triggerFlagsChanged();
-            }
-            else if (type == "var")
-            {
+            } else if (type == "var") {
                 Core()->triggerVarsChanged();
-            }
-            else if (type == "function")
-            {
+            } else if (type == "function") {
                 Core()->triggerFunctionRenamed(oldName, newName);
             }
         }
     }
+}
+
+void DisassemblyContextMenu::on_actionSetFunctionVarTypes_triggered()
+{
+    SetFunctionVarTypes *dialog;
+
+
+    RAnalFunction *fcn = Core()->functionAt(offset);
+
+    dialog = new SetFunctionVarTypes(this);
+
+    if(fcn)
+    {
+        dialog->setWindowTitle(tr("Set Variable Types for Function: %1").arg(fcn->name));
+    }
+    dialog->setFcn(fcn);
+
+    dialog->exec();
+
 }
 
 void DisassemblyContextMenu::on_actionXRefs_triggered()
@@ -423,6 +636,34 @@ void DisassemblyContextMenu::on_actionDisplayOptions_triggered()
     auto *dialog = new PreferencesDialog(this->window());
     dialog->showSection(PreferencesDialog::Section::Disassembly);
     dialog->show();
+}
+
+void DisassemblyContextMenu::on_actionSetToCode_triggered()
+{
+    Core()->setToCode(offset);
+}
+
+void DisassemblyContextMenu::on_actionSetToData_triggered()
+{
+    int size = Core()->sizeofDataMeta(offset);
+    if (size > 8 || (size && (size & (size - 1)))) {
+        return;
+    }
+    if (size == 0 || size == 8) {
+        size = 1;
+    } else {
+        size *= 2;
+    }
+    setToData(size);
+}
+
+void DisassemblyContextMenu::on_actionSetToDataEx_triggered()
+{
+    auto dialog = new SetToDataDialog(offset, this->window());
+    if (!dialog->exec()) {
+        return;
+    }
+    setToData(dialog->getItemSize(), dialog->getItemCount());
 }
 
 void DisassemblyContextMenu::on_actionDeleteComment_triggered()
@@ -440,78 +681,66 @@ void DisassemblyContextMenu::on_actionDeleteFunction_triggered()
     Core()->delFunction(offset);
 }
 
-void DisassemblyContextMenu::on_actionSetBaseBinary_triggered()
+void DisassemblyContextMenu::setBase(QString base)
 {
-    Core()->setImmediateBase("b", offset);
+    Core()->setImmediateBase(base, offset);
 }
 
-void DisassemblyContextMenu::on_actionSetBaseOctal_triggered()
+void DisassemblyContextMenu::setBits(int bits)
 {
-    Core()->setImmediateBase("o", offset);
+    Core()->setCurrentBits(bits, offset);
 }
 
-void DisassemblyContextMenu::on_actionSetBaseDecimal_triggered()
+void DisassemblyContextMenu::setToData(int size, int repeat)
 {
-    Core()->setImmediateBase("d", offset);
+    Core()->setToData(offset, size, repeat);
 }
 
-void DisassemblyContextMenu::on_actionSetBaseHexadecimal_triggered()
+QAction *DisassemblyContextMenu::addAnonymousAction(QString name, const char *slot,
+                                                    QKeySequence keySequence)
 {
-    Core()->setImmediateBase("h", offset);
-}
-
-void DisassemblyContextMenu::on_actionSetBasePort_triggered()
-{
-    Core()->setImmediateBase("p", offset);
-}
-
-void DisassemblyContextMenu::on_actionSetBaseIPAddr_triggered()
-{
-    Core()->setImmediateBase("i", offset);
-}
-
-void DisassemblyContextMenu::on_actionSetBaseSyscall_triggered()
-{
-    Core()->setImmediateBase("S", offset);
-}
-
-void DisassemblyContextMenu::on_actionSetBaseString_triggered()
-{
-    Core()->setImmediateBase("s", offset);
-}
-
-void DisassemblyContextMenu::on_actionSetBits16_triggered()
-{
-    Core()->setCurrentBits(16, offset);
-}
-
-void DisassemblyContextMenu::on_actionSetBits32_triggered()
-{
-    Core()->setCurrentBits(32, offset);
-}
-
-void DisassemblyContextMenu::on_actionSetBits64_triggered()
-{
-    Core()->setCurrentBits(64, offset);
-}
-
-void DisassemblyContextMenu::createAction(QString name, QKeySequence keySequence, const char *slot)
-{
-    QAction *action = new QAction(this);
-    anonymousActions.append(action);
-    createAction(action, name, keySequence, slot);
-}
-
-void DisassemblyContextMenu::createAction(QAction *action, QString name, QKeySequence keySequence, const char *slot)
-{
-    action->setText(name);
+    auto action = new QAction();
     addAction(action);
+    anonymousActions.append(action);
+    initAction(action, name, slot, keySequence);
+    return action;
+}
+
+void DisassemblyContextMenu::initAction(QAction *action, QString name, const char *slot)
+{
+    action->setParent(this);
+    action->setText(name);
+    if (slot) {
+        connect(action, SIGNAL(triggered(bool)), this, slot);
+    }
+}
+
+void DisassemblyContextMenu::initAction(QAction *action, QString name,
+                                        const char *slot, QKeySequence keySequence)
+{
+    initAction(action, name, slot);
+    if (keySequence.isEmpty()) {
+        return;
+    }
     action->setShortcut(keySequence);
-
-    connect(action, SIGNAL(triggered(bool)), this, slot);
-
     auto pWidget = parentWidget();
-    QShortcut *shortcut = new QShortcut(keySequence, pWidget);
+    auto shortcut = new QShortcut(keySequence, pWidget);
     shortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(shortcut, SIGNAL(activated()), this, slot);
+}
+
+void DisassemblyContextMenu::initAction(QAction *action, QString name,
+                                        const char *slot, QList<QKeySequence> keySequenceList)
+{
+    initAction(action, name, slot);
+    if (keySequenceList.empty()) {
+        return;
+    }
+    action->setShortcuts(keySequenceList);
+    auto pWidget = parentWidget();
+    for (auto keySequence : keySequenceList) {
+        auto shortcut = new QShortcut(keySequence, pWidget);
+        shortcut->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(shortcut, SIGNAL(activated()), this, slot);
+    }
 }

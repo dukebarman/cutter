@@ -9,8 +9,8 @@
 
 
 StringsModel::StringsModel(QList<StringDescription> *strings, QObject *parent)
-        : QAbstractListModel(parent),
-          strings(strings)
+    : QAbstractListModel(parent),
+      strings(strings)
 {
 }
 
@@ -31,68 +31,55 @@ QVariant StringsModel::data(const QModelIndex &index, int role) const
 
     const StringDescription &str = strings->at(index.row());
 
-    switch (role)
-    {
-        case Qt::DisplayRole:
-            switch (index.column())
-            {
-                case OFFSET:
-                    return RAddressString(str.vaddr);
-                case STRING:
-                    return str.string;
-                case TYPE:
-                    return str.type.toUpper();
-                case LENGTH:
-                    return str.length;
-                case SIZE:
-                    return str.size;
-                default:
-                    return QVariant();
-            }
-        case StringDescriptionRole:
-            return QVariant::fromValue(str);
+    switch (role) {
+    case Qt::DisplayRole:
+        switch (index.column()) {
+        case OFFSET:
+            return RAddressString(str.vaddr);
+        case STRING:
+            return str.string;
+        case TYPE:
+            return str.type.toUpper();
+        case LENGTH:
+            return str.length;
+        case SIZE:
+            return str.size;
         default:
             return QVariant();
+        }
+    case StringDescriptionRole:
+        return QVariant::fromValue(str);
+    default:
+        return QVariant();
     }
 }
 
 QVariant StringsModel::headerData(int section, Qt::Orientation, int role) const
 {
-    switch (role)
-    {
-        case Qt::DisplayRole:
-            switch (section)
-            {
-                case OFFSET:
-                    return tr("Address");
-                case STRING:
-                    return tr("String");
-                case TYPE:
-                    return tr("Type");
-                case LENGTH:
-                    return tr("Length");
-                case SIZE:
-                    return tr("Size");
-                default:
-                    return QVariant();
-            }
+    switch (role) {
+    case Qt::DisplayRole:
+        switch (section) {
+        case OFFSET:
+            return tr("Address");
+        case STRING:
+            return tr("String");
+        case TYPE:
+            return tr("Type");
+        case LENGTH:
+            return tr("Length");
+        case SIZE:
+            return tr("Size");
         default:
             return QVariant();
+        }
+    default:
+        return QVariant();
     }
 }
 
-void StringsModel::beginReload()
-{
-    beginResetModel();
-}
-
-void StringsModel::endReload()
-{
-    endResetModel();
-}
-
-StringsSortFilterProxyModel::StringsSortFilterProxyModel(StringsModel *source_model, QObject *parent)
-        : QSortFilterProxyModel(parent)
+StringsSortFilterProxyModel::StringsSortFilterProxyModel(StringsModel *source_model,
+                                                         QObject *parent)
+    : QSortFilterProxyModel(parent)
 {
     setSourceModel(source_model);
     setFilterCaseSensitivity(Qt::CaseInsensitive);
@@ -108,19 +95,24 @@ bool StringsSortFilterProxyModel::filterAcceptsRow(int row, const QModelIndex &p
 
 bool StringsSortFilterProxyModel::lessThan(const QModelIndex &left, const QModelIndex &right) const
 {
-    StringDescription left_str = left.data(StringsModel::StringDescriptionRole).value<StringDescription>();
-    StringDescription right_str = right.data(StringsModel::StringDescriptionRole).value<StringDescription>();
+    StringDescription left_str = left.data(
+                                     StringsModel::StringDescriptionRole).value<StringDescription>();
+    StringDescription right_str = right.data(
+                                      StringsModel::StringDescriptionRole).value<StringDescription>();
 
-    switch (left.column())
-    {
-        case StringsModel::OFFSET:
-            if (left_str.vaddr != right_str.vaddr)
-                return left_str.vaddr < right_str.vaddr;
-            // fallthrough
-        case StringsModel::STRING:
-            return left_str.string < right_str.string;
-        default:
-            break;
+    switch (left.column()) {
+    case StringsModel::OFFSET:
+        return left_str.vaddr < right_str.vaddr;
+    case StringsModel::STRING: // sort by string
+        return left_str.string < right_str.string;
+    case StringsModel::TYPE: // sort by type
+        return left_str.type < right_str.type;
+    case StringsModel::SIZE: // sort by size
+        return left_str.size < right_str.size;
+    case StringsModel::LENGTH: // sort by length
+        return left_str.length < right_str.length;
+    default:
+        break;
     }
 
     // fallback
@@ -128,11 +120,15 @@ bool StringsSortFilterProxyModel::lessThan(const QModelIndex &left, const QModel
 }
 
 
-StringsWidget::StringsWidget(QWidget *parent) :
-    QDockWidget(parent),
-    ui(new Ui::StringsWidget)
+StringsWidget::StringsWidget(MainWindow *main, QAction *action) :
+    CutterDockWidget(main, action),
+    ui(new Ui::StringsWidget),
+    tree(new CutterTreeWidget(this))
 {
     ui->setupUi(this);
+
+    // Add Status Bar footer
+    tree->addStatusBar(ui->verticalLayout);
 
     qhelpers::setVerticalScrollMode(ui->stringsTreeView);
 
@@ -151,9 +147,14 @@ StringsWidget::StringsWidget(QWidget *parent) :
     ui->stringsTreeView->setModel(proxy_model);
     ui->stringsTreeView->sortByColumn(StringsModel::OFFSET, Qt::AscendingOrder);
 
-    connect(ui->quickFilterView, SIGNAL(filterTextChanged(const QString &)), proxy_model, SLOT(setFilterWildcard(const QString &)));
+    connect(ui->quickFilterView, SIGNAL(filterTextChanged(const QString &)), proxy_model,
+            SLOT(setFilterWildcard(const QString &)));
     connect(ui->quickFilterView, SIGNAL(filterClosed()), ui->stringsTreeView, SLOT(setFocus()));
 
+    connect(ui->quickFilterView, &QuickFilterView::filterTextChanged, this, [this] {
+        tree->showItemsNumber(proxy_model->rowCount());
+    });
+    
     connect(Core(), SIGNAL(refreshAll()), this, SLOT(refreshStrings()));
 }
 
@@ -161,21 +162,36 @@ StringsWidget::~StringsWidget() {}
 
 void StringsWidget::on_stringsTreeView_doubleClicked(const QModelIndex &index)
 {
+    if (!index.isValid())
+        return;
+
     StringDescription str = index.data(StringsModel::StringDescriptionRole).value<StringDescription>();
-    CutterCore::getInstance()->seek(str.vaddr);
+    Core()->seek(str.vaddr);
 }
 
 void StringsWidget::refreshStrings()
 {
-    model->beginReload();
-    strings = CutterCore::getInstance()->getAllStrings();
-    model->endReload();
+    if (task) {
+        task->wait();
+    }
 
-    ui->stringsTreeView->resizeColumnToContents(0);
-    ui->stringsTreeView->resizeColumnToContents(1);
+    task = QSharedPointer<StringsTask>(new StringsTask());
+    connect(task.data(), &StringsTask::stringSearchFinished, this,
+            &StringsWidget::stringSearchFinished);
+    Core()->getAsyncTaskManager()->start(task);
+}
+
+void StringsWidget::stringSearchFinished(const QList<StringDescription> &strings)
+{
+    model->beginResetModel();
+    this->strings = strings;
+    model->endResetModel();
+
+    qhelpers::adjustColumns(ui->stringsTreeView, 5, 0);
     if (ui->stringsTreeView->columnWidth(1) > 300)
         ui->stringsTreeView->setColumnWidth(1, 300);
-    ui->stringsTreeView->resizeColumnToContents(2);
-    ui->stringsTreeView->resizeColumnToContents(3);
-    ui->stringsTreeView->resizeColumnToContents(4);
+
+    tree->showItemsNumber(proxy_model->rowCount());
+
+    task = nullptr;
 }

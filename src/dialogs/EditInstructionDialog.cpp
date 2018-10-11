@@ -1,15 +1,17 @@
 #include "EditInstructionDialog.h"
 #include "ui_EditInstructionDialog.h"
+#include "Cutter.h"
 
-EditInstructionDialog::EditInstructionDialog(QWidget *parent) :
+EditInstructionDialog::EditInstructionDialog(QWidget *parent, bool isEditingBytes) :
     QDialog(parent),
-    ui(new Ui::EditInstructionDialog)
+    ui(new Ui::EditInstructionDialog),
+    isEditingBytes(isEditingBytes)
 {
     ui->setupUi(this);
     setWindowFlags(windowFlags() & (~Qt::WindowContextHelpButtonHint));
 
-    // Event filter for capturing Ctrl/Cmd+Return
-    ui->lineEdit->installEventFilter(this);
+    connect(ui->lineEdit, SIGNAL(textEdited(const QString &)), this,
+            SLOT(updatePreview(const QString &)));
 }
 
 EditInstructionDialog::~EditInstructionDialog() {}
@@ -32,25 +34,21 @@ QString EditInstructionDialog::getInstruction()
 void EditInstructionDialog::setInstruction(const QString &instruction)
 {
     ui->lineEdit->setText(instruction);
+    updatePreview(instruction);
 }
 
-bool EditInstructionDialog::eventFilter(QObject *obj, QEvent *event)
+void EditInstructionDialog::updatePreview(const QString &input)
 {
-    Q_UNUSED(obj);
-
-    if (event -> type() == QEvent::KeyPress)
-    {
-        QKeyEvent *keyEvent = static_cast <QKeyEvent *>(event);
-
-        // Confirm comment by pressing Ctrl/Cmd+Return
-        if ((keyEvent -> modifiers() & Qt::ControlModifier) &&
-                ((keyEvent -> key() == Qt::Key_Enter) || (keyEvent -> key() == Qt::Key_Return)))
-        {
-            this->accept();
-            return true;
-        }
+    QString result;
+    if (isEditingBytes) {
+        result = Core()->disassemble(input).trimmed();
+    } else {
+        result = Core()->assemble(input).trimmed();
     }
 
-
-    return false;
+    if (result.isEmpty() || result.contains("\n")) {
+        ui->instructionLabel->setText("Unknown Instruction");
+    } else {
+        ui->instructionLabel->setText(result);
+    }
 }

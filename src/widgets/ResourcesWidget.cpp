@@ -1,5 +1,6 @@
 #include "utils/Helpers.h"
 #include "ResourcesWidget.h"
+#include "MainWindow.h"
 #include <QVBoxLayout>
 
 ResourcesModel::ResourcesModel(QList<ResourcesDescription> *resources, QObject *parent)
@@ -22,40 +23,36 @@ QVariant ResourcesModel::data(const QModelIndex &index, int role) const
 {
     const ResourcesDescription &res = resources->at(index.row());
 
-    switch (role)
-    {
-        case Qt::DisplayRole:
-            switch (index.column())
-            {
-                case NAME:
-                    return res.name;
-                case VADDR:
-                    return RAddressString(res.vaddr);
-                case INDEX:
-                    return res.index;
-                case TYPE:
-                    return res.type;
-                case SIZE:
-                    return qhelpers::formatBytecount(res.size);
-                case LANG:
-                    return res.lang;
-                default:
-                    return QVariant();
-            }
-        case Qt::UserRole:
-            return QVariant::fromValue(res);
+    switch (role) {
+    case Qt::DisplayRole:
+        switch (index.column()) {
+        case NAME:
+            return res.name;
+        case VADDR:
+            return RAddressString(res.vaddr);
+        case INDEX:
+            return res.index;
+        case TYPE:
+            return res.type;
+        case SIZE:
+            return qhelpers::formatBytecount(res.size);
+        case LANG:
+            return res.lang;
         default:
             return QVariant();
+        }
+    case Qt::UserRole:
+        return QVariant::fromValue(res);
+    default:
+        return QVariant();
     }
 }
 
 QVariant ResourcesModel::headerData(int section, Qt::Orientation, int role) const
 {
-    switch (role)
-    {
+    switch (role) {
     case Qt::DisplayRole:
-        switch (section)
-        {
+        switch (section) {
         case NAME:
             return tr("Name");
         case VADDR:
@@ -76,19 +73,11 @@ QVariant ResourcesModel::headerData(int section, Qt::Orientation, int role) cons
     }
 }
 
-void ResourcesModel::beginReload()
+ResourcesWidget::ResourcesWidget(MainWindow *main, QAction *action) :
+    CutterDockWidget(main, action)
 {
-    beginResetModel();
-}
+    setObjectName("ResourcesWidget");
 
-void ResourcesModel::endReload()
-{
-    endResetModel();
-}
-
-ResourcesWidget::ResourcesWidget(QWidget *parent)
-    : QDockWidget(parent)
-{
     model = new ResourcesModel(&resources, this);
 
     // Configure widget
@@ -101,18 +90,22 @@ ResourcesWidget::ResourcesWidget(QWidget *parent)
     this->setWidget(view);
 
     connect(Core(), SIGNAL(refreshAll()), this, SLOT(refreshResources()));
-    connect(view, SIGNAL(doubleClicked(const QModelIndex &)), this, SLOT(onDoubleClicked(const QModelIndex &)));
+    connect(view, SIGNAL(doubleClicked(const QModelIndex &)), this,
+            SLOT(onDoubleClicked(const QModelIndex &)));
 }
 
 void ResourcesWidget::refreshResources()
 {
-    model->beginReload();
+    model->beginResetModel();
     resources = Core()->getAllResources();
-    model->endReload();
+    model->endResetModel();
 }
 
 void ResourcesWidget::onDoubleClicked(const QModelIndex &index)
 {
+    if (!index.isValid())
+        return;
+
     ResourcesDescription res = index.data(Qt::UserRole).value<ResourcesDescription>();
-    CutterCore::getInstance()->seek(res.vaddr);
+    Core()->seek(res.vaddr);
 }

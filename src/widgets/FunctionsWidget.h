@@ -5,22 +5,26 @@
 
 #include <QSortFilterProxyModel>
 #include <QTreeView>
-#include <QDockWidget>
 
-#include "cutter.h"
+#include "Cutter.h"
+#include "CutterDockWidget.h"
+#include "CutterTreeWidget.h"
 
 class MainWindow;
 class QTreeWidgetItem;
+class FunctionsTask;
+class FunctionsWidget;
 
-namespace Ui
-{
-    class FunctionsWidget;
+namespace Ui {
+class FunctionsWidget;
 }
 
 
 class FunctionModel : public QAbstractItemModel
 {
     Q_OBJECT
+
+    friend FunctionsWidget;
 
 private:
     QList<FunctionDescription> *functions;
@@ -42,9 +46,13 @@ public:
     static const int FunctionDescriptionRole = Qt::UserRole;
     static const int IsImportRole = Qt::UserRole + 1;
 
-    enum Column { NameColumn = 0, SizeColumn, ImportColumn, OffsetColumn, ColumnCount };
+    enum Column { NameColumn = 0, SizeColumn, ImportColumn, OffsetColumn, NargsColumn, NbbsColumn,
+                  NlocalsColumn, CcColumn, CalltypeColumn, EdgesColumn, CostColumn, CallsColumn,
+                  FrameColumn, ColumnCount
+                };
 
-    FunctionModel(QList<FunctionDescription> *functions, QSet<RVA> *importAddresses, ut64 *mainAdress, bool nested, QFont defaultFont, QFont highlightFont, QObject *parent = 0);
+    FunctionModel(QList<FunctionDescription> *functions, QSet<RVA> *importAddresses, ut64 *mainAdress,
+                  bool nested, QFont defaultFont, QFont highlightFont, QObject *parent = nullptr);
 
     QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const;
     QModelIndex parent(const QModelIndex &index) const;
@@ -55,16 +63,16 @@ public:
     QVariant data(const QModelIndex &index, int role) const;
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const;
 
-    void beginReloadFunctions();
-    void endReloadFunctions();
-
     /*!
      * @return true if the index changed
      */
     bool updateCurrentIndex();
 
     void setNested(bool nested);
-    bool isNested()                 { return nested; }
+    bool isNested()
+    {
+        return nested;
+    }
 
 private slots:
     void seekChanged(RVA addr);
@@ -77,7 +85,7 @@ class FunctionSortFilterProxyModel : public QSortFilterProxyModel
     Q_OBJECT
 
 public:
-    FunctionSortFilterProxyModel(FunctionModel *source_model, QObject *parent = 0);
+    FunctionSortFilterProxyModel(FunctionModel *source_model, QObject *parent = nullptr);
 
 protected:
     bool filterAcceptsRow(int row, const QModelIndex &parent) const override;
@@ -86,12 +94,12 @@ protected:
 
 
 
-class FunctionsWidget : public QDockWidget
+class FunctionsWidget : public CutterDockWidget
 {
     Q_OBJECT
 
 public:
-    explicit FunctionsWidget(MainWindow *main, QWidget *parent = 0);
+    explicit FunctionsWidget(MainWindow *main, QAction *action = nullptr);
     ~FunctionsWidget();
 
 private slots:
@@ -115,7 +123,9 @@ protected:
 
 private:
     std::unique_ptr<Ui::FunctionsWidget> ui;
-    MainWindow      *main;
+    MainWindow *main;
+
+    QSharedPointer<FunctionsTask> task;
 
     QList<FunctionDescription> functions;
     QSet<RVA> importAddresses;
@@ -123,6 +133,8 @@ private:
 
     FunctionModel *functionModel;
     FunctionSortFilterProxyModel *functionProxyModel;
+
+    CutterTreeWidget *tree;
 
     void setScrollMode();
 };

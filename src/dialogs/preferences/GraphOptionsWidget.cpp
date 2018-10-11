@@ -10,8 +10,8 @@
 #include "utils/Configuration.h"
 
 GraphOptionsWidget::GraphOptionsWidget(PreferencesDialog */*dialog*/, QWidget *parent)
-  : QDialog(parent),
-    ui(new Ui::GraphOptionsWidget)
+    : QDialog(parent),
+      ui(new Ui::GraphOptionsWidget)
 {
     ui->setupUi(this);
 
@@ -25,6 +25,7 @@ GraphOptionsWidget::~GraphOptionsWidget() {}
 
 void GraphOptionsWidget::updateOptionsFromVars()
 {
+    qhelpers::setCheckedWithoutSignals(ui->graphOffsetCheckBox, Config()->getConfigBool("graph.offset"));
     ui->maxColsSpinBox->blockSignals(true);
     ui->maxColsSpinBox->setValue(Config()->getGraphBlockMaxChars());
     ui->maxColsSpinBox->blockSignals(false);
@@ -44,3 +45,8 @@ void GraphOptionsWidget::on_maxColsSpinBox_valueChanged(int value)
     triggerOptionsChanged();
 }
 
+void GraphOptionsWidget::on_graphOffsetCheckBox_toggled(bool checked)
+{
+    Config()->setConfig("graph.offset", checked);
+    triggerOptionsChanged();
+}

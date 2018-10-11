@@ -5,26 +5,32 @@
 
 #include <QTreeView>
 #include <QSortFilterProxyModel>
-#include <QDockWidget>
 
-#include "cutter.h"
+#include "Cutter.h"
+#include "CutterDockWidget.h"
+#include "CutterTreeWidget.h"
 
-namespace Ui
-{
-    class VTablesWidget;
+namespace Ui {
+class VTablesWidget;
 }
+
+class MainWindow;
+class VTablesWidget;
 
 class VTableModel : public QAbstractItemModel
 {
     Q_OBJECT
+
+    friend VTablesWidget;
 
 private:
     QList<VTableDescription> *vtables;
 
 public:
     enum Columns { NAME = 0, ADDRESS, COUNT };
+    static const int VTableDescriptionRole = Qt::UserRole;
 
-    VTableModel(QList<VTableDescription> *vtables, QObject* parent = nullptr);
+    VTableModel(QList<VTableDescription> *vtables, QObject *parent = nullptr);
 
     QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const;
     QModelIndex parent(const QModelIndex &index) const;
@@ -34,30 +40,28 @@ public:
 
     QVariant data(const QModelIndex &index, int role) const;
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const;
-
-    void beginReload();
-    void endReload();
 };
 
 class VTableSortFilterProxyModel : public QSortFilterProxyModel
 {
 public:
-    VTableSortFilterProxyModel(VTableModel* model, QObject *parent = nullptr);
+    VTableSortFilterProxyModel(VTableModel *model, QObject *parent = nullptr);
 
 protected:
     bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const;
 };
 
-class VTablesWidget : public QDockWidget
+class VTablesWidget : public CutterDockWidget
 {
     Q_OBJECT
 
 public:
-    explicit VTablesWidget(QWidget *parent = 0);
+    explicit VTablesWidget(MainWindow *main, QAction *action = nullptr);
     ~VTablesWidget();
 
 private slots:
     void refreshVTables();
+    void on_vTableTreeView_doubleClicked(const QModelIndex &index);
 
 private:
     std::unique_ptr<Ui::VTablesWidget> ui;
@@ -65,6 +69,7 @@ private:
     VTableModel *model;
     QSortFilterProxyModel *proxy;
     QList<VTableDescription> vtables;
+    CutterTreeWidget *tree;
 };
 
 #endif // VTABLESWIDGET_H

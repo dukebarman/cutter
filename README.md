@@ -1,115 +1,41 @@
+<img width="150" height="150" align="left" style="float: left; margin: 0 10px 0 0;" alt="Cutter logo" src="https://raw.githubusercontent.com/radareorg/cutter/master/src/img/cutter.svg?sanitize=true">
+
 # Cutter
+
+Cutter is a Qt and C++ GUI for radare2. Its goal is making an advanced, customizable and FOSS reverse-engineering platform while keeping the user experience at mind. Cutter is created by reverse engineers for reverse engineers.  
+
 [![Build Status](https://travis-ci.org/radareorg/cutter.svg?branch=master)](https://travis-ci.org/radareorg/cutter)
 [![Build status](https://ci.appveyor.com/api/projects/status/s9rkx1dn3uy4bfdx/branch/master?svg=true)](https://ci.appveyor.com/project/radare/cutter/branch/master)
 
-A Qt and C++ GUI for radare2 reverse engineering framework (originally named Iaito).
 
-## Screenshot
+![Screenshot](https://raw.githubusercontent.com/radareorg/cutter/master/docs/images/screenshot.png)
 
-![Screenshot](https://raw.githubusercontent.com/radareorg/cutter/master/docs/screenshot.png)
 
-## Disclaimer
+# Downloading a release
 
-Cutter is not aimed at existing radare2 users. It instead focuses on those whose are not yet radare2 users because of the learning curve, because they don't like CLI applications or because of the difficulty/instability of radare2.
-
-## Installing
-
-### Downloading a release
-
+Cutter is available for all platforms (Linux, OS X, Windows).
 You can download the latest release [here](https://github.com/radareorg/cutter/releases).
+ * OSX: Download the latest `.dmg` file.
+ * Windows: Download the latest Zip archive.
+ * Linux: use the [AppImage](https://github.com/radareorg/cutter/releases/download/v1.7.2/Cutter-v1.7.2-x86_64.Linux.AppImage) file. Then just make it executable and run it:
+     * `chmod +x Cutter-v1.7.2-x86_64.Linux.AppImage`
+     * `./Cutter-v1.7.2-x86_64.Linux.AppImage`
 
-### Building from source
+## Building from sources
 
-#### Requirements
+To build Cutter on your local machine, please follow this guide: [Building from source](https://radareorg.github.io/cutter/building.html)
 
-Cutter is based on Qt so you will need to have it installed.
-- Download: [Qt Open Source](https://www.qt.io/download-qt-for-application-development)
-- Add Qt 5.9.1: http://doc.qt.io/qtcreator/creator-project-qmake.html
-    
-#### Building
+## Docker
 
-First you must clone the repository:
-```sh
-git clone https://github.com/radareorg/cutter
-cd cutter
-```
+To deploy *cutter* using a pre-built `Dockerfile`, it's possible to use the [provided configuration](docker). The corresponding `README.md` file also contains instructions on how to get started using the docker image with minimal effort.
 
-##### Building radare2
-**/!\ WARNING /!\ This will delete your current radare2 version if any already installed.**
-```sh
-git submodule init radare2 && git submodule update radare2
-cd radare2 && ./sys/install.sh
-cd ..
-```
+# Documentation
 
-##### Building cutter
+You can find our documentation [here](https://radareorg.github.io/cutter/).
 
-Cutter can be build with two methods: The preferred one is with qmake, but you can also compile it with cmake. Choose the one you want to use.
+# Help
 
-- Method 1: Qmake
-```sh
-mkdir build
-cd build
-qmake ../src
-make
-```
-
-- Method 2: CMake
-```sh
-mkdir build
-cd build
-cmake ../src
-make
-```
-
-Then run cutter: `./Cutter` or `./build/Cutter`
-
-Note: If radare2 is not installed system-wide (`./sys/user.sh` installation for instance) you might want to use  `LD_LIBRARY_PATH=$HOME/bin/prefix/radare2/lib ./Cutter` to run cutter.
-
-
-## Troubleshooting
-
-Check this [page](https://github.com/radareorg/cutter/blob/master/docs/Common-errors.md) for common issues.
-
-On Mac, QT5 apps fail to build on QtCreator if you have the libjpeg lib installed with brew. Run this command to workaround the issue:
-
-	sudo mv /usr/local/lib/libjpeg.dylib /usr/local/lib/libjpeg.dylib.not-found
-	
-If you encounter the `Project ERROR: r_core development package not found` try this command instead `PKG_CONFIG_PATH=$HOME/bin/prefix/radare2/lib/pkgconfig qmake`
-
-## Platforms
-
-Cutter is developed on OS X, Linux and Windows. The first release for users will include installers for all three platforms.
-
-## Keyboard shortcuts
-
-| Shortcut | Function |
-| --- | --- |
-| Global shortcuts: ||
-| . | Focus console input |
-| G & S | Focus search bar |
-| F5 | Refresh contents |
-| Disassembly view: ||
-| Esc | Seek to previous position |
-| Space | Switch to disassembly graph view |
-| Ctrl/Cmd+C | Copy |
-| ; | Add comment |
-| N | Rename current function/flag |
-| Shift+N | Rename flag/function used here |
-| X | Show Xrefs |
-| Disassembly graph view: ||
-| Esc | Seek to previous position |
-| Space | Switch to disassembly view |
-| + | Zoom in |
-| - | Zoom out |
-| = | Reset zoom |
-| J | Next instruction |
-| K | Previous instruction |
-
-
-## Help
-
-Right now the best place to obtain help from *cutter* developers and community is joining this telegram group:
+Right now the best place to obtain help from *Cutter* developers and community is to contact us on:
 
 - https://t.me/r2cutter
 - #cutter on irc.freenode.net

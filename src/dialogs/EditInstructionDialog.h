@@ -5,9 +5,8 @@
 #include <QKeyEvent>
 #include <memory>
 
-namespace Ui
-{
-    class EditInstructionDialog;
+namespace Ui {
+class EditInstructionDialog;
 }
 
 class EditInstructionDialog : public QDialog
@@ -15,7 +14,7 @@ class EditInstructionDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit EditInstructionDialog(QWidget *parent = 0);
+    explicit EditInstructionDialog(QWidget *parent, bool isEditingBytes);
     ~EditInstructionDialog();
 
     QString getInstruction();
@@ -26,10 +25,11 @@ private slots:
 
     void on_buttonBox_rejected();
 
+    void updatePreview(const QString &input);
+
 private:
     std::unique_ptr<Ui::EditInstructionDialog> ui;
-
-    bool eventFilter(QObject *obj, QEvent *event);
+    bool isEditingBytes; // true if editing intruction **bytes**; false if editing instruction **text**
 };
 
 #endif // EDITINSTRUCTIONDIALOG_H

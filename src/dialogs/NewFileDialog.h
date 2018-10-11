@@ -5,17 +5,16 @@
 #include <QListWidgetItem>
 #include <memory>
 
-namespace Ui
-{
-    class NewFileDialog;
+namespace Ui {
+class NewFileDialog;
 }
 
 class NewFileDialog : public QDialog
 {
-Q_OBJECT
+    Q_OBJECT
 
 public:
-    explicit NewFileDialog(QWidget *parent = 0);
+    explicit NewFileDialog(QWidget *parent = nullptr);
     ~NewFileDialog();
 
 private slots:
@@ -24,6 +23,7 @@ private slots:
 
     void on_selectProjectsDirButton_clicked();
     void on_loadProjectButton_clicked();
+    void on_shellcodeButton_clicked();
 
     void on_aboutButton_clicked();
 
@@ -35,6 +35,9 @@ private slots:
 
     void on_actionRemove_item_triggered();
     void on_actionClear_all_triggered();
+    void on_actionRemove_project_triggered();
+
+    void on_tabWidget_currentChanged(int index);
 
 protected:
     void dragEnterEvent(QDragEnterEvent *event);
@@ -52,9 +55,11 @@ private:
      * @return true if list is not empty
      */
     bool fillProjectsList();
+    void fillIOPluginsList();
 
     void loadFile(const QString &filename);
     void loadProject(const QString &project);
+    void loadShellcode(const QString &shellcode, const int size);
 
     static const int MaxRecentFiles = 5;
 };

@@ -61,15 +61,7 @@ QToolTip {
 	color: rgb(232, 232, 232);
 	font: 11pt &quot;Monaco&quot;;
 }
-/*
-QDockWidget::title {
-	background: rgb(64, 66, 68);
-}
-
-QDockWidget {
-	color: rgb(232, 232, 232);
-}
-*/</string>
+</string>
   </property>
   <property name="documentMode">
    <bool>false</bool>
@@ -77,88 +69,10 @@ QDockWidget {
   <property name="dockNestingEnabled">
    <bool>true</bool>
   </property>
-  <widget class="QWidget" name="centralWidget">
-   <property name="sizePolicy">
-    <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
-     <horstretch>0</horstretch>
-     <verstretch>0</verstretch>
-    </sizepolicy>
+  <widget class="QMenu" name="addExtraWidgets">
+   <property name="title">
+    <string>Add extra...</string>
    </property>
-   <layout class="QVBoxLayout" name="verticalLayout_10">
-    <property name="leftMargin">
-     <number>0</number>
-    </property>
-    <property name="topMargin">
-     <number>0</number>
-    </property>
-    <property name="rightMargin">
-     <number>0</number>
-    </property>
-    <property name="bottomMargin">
-     <number>5</number>
-    </property>
-    <item>
-     <widget class="QTabWidget" name="centralTabWidget">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="styleSheet">
-       <string notr="true">QTabWidget::pane { /* The tab widget frame */
-border-top: 0px;
-}</string>
-      </property>
-      <property name="tabPosition">
-       <enum>QTabWidget::South</enum>
-      </property>
-      <property name="currentIndex">
-       <number>0</number>
-      </property>
-      <property name="usesScrollButtons">
-       <bool>false</bool>
-      </property>
-      <property name="documentMode">
-       <bool>false</bool>
-      </property>
-      <property name="tabsClosable">
-       <bool>false</bool>
-      </property>
-      <widget class="QWidget" name="tab">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <attribute name="title">
-        <string notr="true">Console</string>
-       </attribute>
-       <layout class="QVBoxLayout" name="tabVerticalLayout">
-        <property name="spacing">
-         <number>0</number>
-        </property>
-        <property name="sizeConstraint">
-         <enum>QLayout::SetNoConstraint</enum>
-        </property>
-        <property name="leftMargin">
-         <number>0</number>
-        </property>
-        <property name="topMargin">
-         <number>0</number>
-        </property>
-        <property name="rightMargin">
-         <number>0</number>
-        </property>
-        <property name="bottomMargin">
-         <number>0</number>
-        </property>
-       </layout>
-      </widget>
-     </widget>
-    </item>
-   </layout>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
@@ -178,10 +92,10 @@ border-top: 0px;
    <widget class="QMenu" name="menuFile">
     <property name="geometry">
      <rect>
-      <x>346</x>
-      <y>97</y>
-      <width>148</width>
-      <height>238</height>
+      <x>378</x>
+      <y>100</y>
+      <width>139</width>
+      <height>240</height>
      </rect>
     </property>
     <property name="title">
@@ -190,15 +104,16 @@ border-top: 0px;
     <addaction name="actionNew"/>
     <addaction name="actionOpen"/>
     <addaction name="separator"/>
-    <addaction name="actionAnalyze"/>
     <addaction name="actionImportPDB"/>
     <addaction name="separator"/>
     <addaction name="actionSave"/>
     <addaction name="actionSaveAs"/>
+    <addaction name="actionExport_as_code"/>
     <addaction name="separator"/>
     <addaction name="actionRun_Script"/>
     <addaction name="separator"/>
     <addaction name="actionQuit"/>
+    <addaction name="separator"/>
    </widget>
    <widget class="QMenu" name="menuView">
     <property name="title">
@@ -214,8 +129,6 @@ border-top: 0px;
     <addaction name="separator"/>
     <addaction name="actionLock"/>
     <addaction name="actionTabs_on_Top"/>
-    <addaction name="separator"/>
-    <addaction name="actionPreferences"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
@@ -227,44 +140,85 @@ border-top: 0px;
     <property name="title">
      <string>Edit</string>
     </property>
+    <addaction name="actionSearch"/>
     <addaction name="actionUndoSeek"/>
     <addaction name="actionRedoSeek"/>
+    <addaction name="separator"/>
+    <addaction name="actionPreferences"/>
    </widget>
    <widget class="QMenu" name="menuWindows">
     <property name="title">
      <string>Windows</string>
     </property>
+    <widget class="QMenu" name="menuAddExtraWidget">
+     <property name="title">
+      <string>Add extra...</string>
+     </property>
+     <addaction name="actionExtraGraph"/>
+     <addaction name="actionExtraHexdump"/>
+     <addaction name="actionExtraDisassembly"/>
+    </widget>
+    <widget class="QMenu" name="menuAddInfoWidgets">
+     <property name="title">
+      <string>Info...</string>
+     </property>
+     <addaction name="actionEntrypoints"/>
+     <addaction name="actionClasses"/>
+     <addaction name="actionImports"/>
+     <addaction name="actionExports"/>
+     <addaction name="actionSymbols"/>
+     <addaction name="actionSDBBrowser"/>
+     <addaction name="actionResources"/>
+     <addaction name="actionVTables"/>
+     <addaction name="actionTypes"/>
+     <addaction name="actionFlags"/>
+     <addaction name="actionSections"/>
+     <addaction name="actionHeaders"/>
+     <addaction name="actionZignatures"/>
+     <addaction name="actionRelocs"/>
+    </widget>
+    <widget class="QMenu" name="menuAddDebugWidgets">
+     <property name="title">
+      <string>Debug...</string>
+     </property>
+     <addaction name="actionStack"/>
+     <addaction name="actionRegisters"/>
+     <addaction name="actionBacktrace"/>
+     <addaction name="actionMemoryMap"/>
+     <addaction name="actionBreakpoint"/>
+     <addaction name="actionRegisterRefs"/>
+    </widget>
     <addaction name="actionDashboard"/>
     <addaction name="separator"/>
     <addaction name="actionDisassembly"/>
     <addaction name="actionGraph"/>
     <addaction name="actionHexdump"/>
     <addaction name="actionPseudocode"/>
+    <addaction name="actionFunctions"/>
     <addaction name="actionSidebar"/>
     <addaction name="separator"/>
-    <addaction name="actionEntrypoints"/>
-    <addaction name="actionFunctions"/>
-    <addaction name="actionClasses"/>
-    <addaction name="actionImports"/>
-    <addaction name="actionExports"/>
-    <addaction name="actionSymbols"/>
-    <addaction name="actionSDBBrowser"/>
-    <addaction name="actionResources"/>
-    <addaction name="actionVTables"/>
-    <addaction name="separator"/>
-    <addaction name="actionRelocs"/>
     <addaction name="actionStrings"/>
-    <addaction name="actionFlags"/>
-    <addaction name="actionSections"/>
+    <addaction name="actionSearch"/>
+    <addaction name="separator"/>
+    <addaction name="menuAddInfoWidgets"/>
+    <addaction name="menuAddDebugWidgets"/>
     <addaction name="separator"/>
     <addaction name="actionComments"/>
     <addaction name="actionConsole"/>
     <addaction name="actionJupyter"/>
+    <addaction name="separator"/>
+    <addaction name="menuAddExtraWidget"/>
+   </widget>
+   <widget class="QMenu" name="menuDebug">
+    <property name="title">
+     <string>Debug</string>
+    </property>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
    <addaction name="menuView"/>
    <addaction name="menuWindows"/>
+   <addaction name="menuDebug"/>
    <addaction name="menuHelp"/>
   </widget>
   <widget class="QToolBar" name="mainToolBar">
@@ -280,30 +234,13 @@ border-top: 0px;
    <property name="windowTitle">
     <string notr="true">Main toolbar</string>
    </property>
-   <property name="styleSheet">
-    <string notr="true">QToolButton { /* all types of tool button */
-    margin-bottom: 1px;
-    margin-top: 1px;
-    margin-left: 2px;
-    margin-right: 2px;
-    padding: 2px;
-    padding-left: 7px;
-    padding-right: 7px;
-	background-color: palette(light);
-    border-radius: 6px;
-}
-
-QToolButton:pressed {
-	background-color: palette(dark);
-}</string>
-   </property>
    <property name="movable">
     <bool>false</bool>
    </property>
    <property name="iconSize">
     <size>
-     <width>18</width>
-     <height>18</height>
+     <width>16</width>
+     <height>16</height>
     </size>
    </property>
    <property name="toolButtonStyle">
@@ -315,6 +252,7 @@ QToolButton:pressed {
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
+   <addaction name="actionBackward"/>
    <addaction name="actionForward"/>
   </widget>
   <action name="actionDefault">
@@ -323,6 +261,14 @@ QToolButton:pressed {
    </property>
    <property name="toolTip">
     <string>Reset layout</string>
+   </property>
+  </action>
+  <action name="actionZen">
+   <property name="text">
+    <string>Zen Mode</string>
+   </property>
+   <property name="toolTip">
+    <string>Zen mode</string>
    </property>
   </action>
   <action name="actionAbout">
@@ -431,10 +377,10 @@ QToolButton:pressed {
     <string>Find previous</string>
    </property>
   </action>
-  <action name="actionBack">
+  <action name="actionBackward">
    <property name="icon">
     <iconset resource="resources.qrc">
-     <normaloff>:/img/icons/arrow_left.svg</normaloff>:/img/icons/arrow_left.svg</iconset>
+     <normaloff>:/img/icons/arrow_left_light.svg</normaloff>:/img/icons/arrow_left_light.svg</iconset>
    </property>
    <property name="text">
     <string>Back</string>
@@ -446,7 +392,7 @@ QToolButton:pressed {
   <action name="actionForward">
    <property name="icon">
     <iconset resource="resources.qrc">
-     <normaloff>:/img/icons/arrow_right.svg</normaloff>:/img/icons/arrow_right.svg</iconset>
+     <normaloff>:/img/icons/arrow_right_light.svg</normaloff>:/img/icons/arrow_right_light.svg</iconset>
    </property>
    <property name="text">
     <string>Forward</string>
@@ -654,11 +600,6 @@ QToolButton:pressed {
   <action name="actionBindiff">
    <property name="text">
     <string>Bindiff</string>
-   </property>
-  </action>
-  <action name="actionSearch">
-   <property name="text">
-    <string>Search</string>
    </property>
   </action>
   <action name="actionAnalysis">
@@ -1012,6 +953,54 @@ QToolButton:pressed {
     <string>Console</string>
    </property>
   </action>
+  <action name="actionStack">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Stack</string>
+   </property>
+  </action>
+  <action name="actionRegisters">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Registers</string>
+   </property>
+  </action>
+  <action name="actionBacktrace">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Backtrace</string>
+   </property>
+  </action>
+  <action name="actionMemoryMap">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Memory map</string>
+   </property>
+  </action>
+  <action name="actionBreakpoint">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Breakpoints</string>
+   </property>
+  </action>
+  <action name="actionRegisterRefs">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Register References</string>
+   </property>
+  </action>
   <action name="actionClasses">
    <property name="checkable">
     <bool>true</bool>
@@ -1049,12 +1038,76 @@ QToolButton:pressed {
     <string>Show/Hide VTables panel</string>
    </property>
   </action>
+  <action name="actionTypes">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Types</string>
+   </property>
+   <property name="toolTip">
+    <string>Show/Hide Types panel</string>
+   </property>
+  </action>
+  <action name="actionSearch">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Search</string>
+   </property>
+   <property name="toolTip">
+    <string>Show/Hide Search panel</string>
+   </property>
+  </action>
+  <action name="actionHeaders">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Headers</string>
+   </property>
+   <property name="toolTip">
+    <string>Show/Hide Headers panel</string>
+   </property>
+  </action>
+  <action name="actionZignatures">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Zignatures</string>
+   </property>
+   <property name="toolTip">
+    <string>Show/Hide Zignatures panel</string>
+   </property>
+  </action>
   <action name="actionJupyter">
    <property name="checkable">
     <bool>true</bool>
    </property>
    <property name="text">
     <string>Jupyter</string>
+   </property>
+  </action>
+  <action name="actionExport_as_code">
+   <property name="text">
+    <string>Export as code</string>
+   </property>
+  </action>
+  <action name="actionExtraHexdump">
+   <property name="text">
+    <string>Hexdump view</string>
+   </property>
+  </action>
+  <action name="actionExtraDisassembly">
+   <property name="text">
+    <string>Disassembly view</string>
+   </property>
+  </action>
+  <action name="actionExtraGraph">
+   <property name="text">
+    <string>Graph view</string>
    </property>
   </action>
  </widget>

@@ -6,13 +6,12 @@
 #include <QPushButton>
 #include <memory>
 
-#include "cutter.h"
+#include "Cutter.h"
 
 class PreferencesDialog;
 
-namespace Ui
-{
-    class GraphOptionsWidget;
+namespace Ui {
+class GraphOptionsWidget;
 }
 
 class GraphOptionsWidget : public QDialog
@@ -32,6 +31,7 @@ private slots:
     void updateOptionsFromVars();
 
     void on_maxColsSpinBox_valueChanged(int value);
+    void on_graphOffsetCheckBox_toggled(bool checked);
 };
 
 

@@ -6,13 +6,12 @@
 #include <QPushButton>
 #include <memory>
 
-#include "cutter.h"
+#include "Cutter.h"
 
 class PreferencesDialog;
 
-namespace Ui
-{
-    class GeneralOptionsWidget;
+namespace Ui {
+class GeneralOptionsWidget;
 }
 
 class GeneralOptionsWidget : public QDialog
@@ -33,6 +32,8 @@ private slots:
     void on_fontSelectionButton_clicked();
     void on_themeComboBox_currentIndexChanged(int index);
     void on_colorComboBox_currentIndexChanged(int index);
+    void on_copyButton_clicked();
+    void on_deleteButton_clicked();
 };
 
 

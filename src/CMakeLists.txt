@@ -4,11 +4,33 @@ cmake_minimum_required(VERSION 3.1)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(DisallowInSource)
 
-project(cutter VERSION 1.2)
-
 option(CUTTER_ENABLE_JUPYTER "Enable Jupyter integration. Requires Python >= 3.3." ON)
-option(CUTTER_ENABLE_QTWEBENGINE "Use QtWebEngine for in-app Jupyter Browser. Unused if CUTTER_ENABLE_JUPYTER=OFF." ON)
+option(CUTTER_ENABLE_QTWEBENGINE "Use QtWebEngine for in-app Jupyter Browser. Unused if CUTTER_ENABLE_JUPYTER=OFF." OFF)
 
+
+# Parse Cutter.pro to get filenames
+include(QMakeProParse)
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Cutter.pro"
+        "${CMAKE_CURRENT_BINARY_DIR}/Cutter.pro"
+        COPYONLY) # trigger reconfigure if Cutter.pro changes
+parse_qmake_pro("${CMAKE_CURRENT_BINARY_DIR}/Cutter.pro" CUTTER_PRO)
+set(SOURCE_FILES ${CUTTER_PRO_SOURCES})
+set(HEADER_FILES ${CUTTER_PRO_HEADERS})
+set(UI_FILES ${CUTTER_PRO_FORMS})
+set(QRC_FILES ${CUTTER_PRO_RESOURCES})
+set(CUTTER_VERSION_MAJOR "${CUTTER_PRO_CUTTER_VERSION_MAJOR}")
+set(CUTTER_VERSION_MINOR "${CUTTER_PRO_CUTTER_VERSION_MINOR}")
+set(CUTTER_VERSION_PATCH "${CUTTER_PRO_CUTTER_VERSION_PATCH}")
+
+set(CUTTER_VERSION_FULL "${CUTTER_VERSION_MAJOR}.${CUTTER_VERSION_MINOR}.${CUTTER_VERSION_PATCH}")
+
+message(STATUS "version from Cutter.pro: ${CUTTER_VERSION_FULL}")
+message(STATUS "sources from Cutter.pro: ${SOURCE_FILES}")
+message(STATUS "headers from Cutter.pro: ${HEADER_FILES}")
+message(STATUS "forms from Cutter.pro: ${UI_FILES}")
+message(STATUS "resources from Cutter.pro: ${QRC_FILES}")
+
+project(Cutter VERSION "${CUTTER_VERSION_FULL}")
 
 set(CMAKE_CXX_STANDARD 11)
 
@@ -16,7 +38,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
-find_package(Qt5 REQUIRED COMPONENTS Core Widgets Gui Svg)
+find_package(Qt5 REQUIRED COMPONENTS Core Widgets Gui Svg Network)
 if(CUTTER_ENABLE_JUPYTER AND CUTTER_ENABLE_QTWEBENGINE)
     find_package(Qt5 COMPONENTS WebEngineWidgets)
     if(NOT Qt5_FOUND)
@@ -64,36 +86,23 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
 endif()
 
 
-# Parse cutter.pro to get filenames
-include(QMakeProParse)
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cutter.pro"
-        "${CMAKE_CURRENT_BINARY_DIR}/cutter.pro"
-        COPYONLY) # trigger reconfigure if cutter.pro changes
-parse_qmake_pro("${CMAKE_CURRENT_BINARY_DIR}/cutter.pro" CUTTER_PRO)
-set(SOURCE_FILES ${CUTTER_PRO_SOURCES})
-set(HEADER_FILES ${CUTTER_PRO_HEADERS})
-set(UI_FILES ${CUTTER_PRO_FORMS})
-set(QRC_FILES ${CUTTER_PRO_RESOURCES})
-
-message(STATUS "sources from cutter.pro: ${SOURCE_FILES}")
-message(STATUS "headers from cutter.pro: ${HEADER_FILES}")
-message(STATUS "forms from cutter.pro: ${UI_FILES}")
-message(STATUS "resources from cutter.pro: ${QRC_FILES}")
-
-
-set(CUTTER_VERSION_SUFFIX "-dev")
-set(CUTTER_VERSION_FULL "${PROJECT_VERSION}${CUTTER_VERSION_SUFFIX}")
 message(STATUS "Building Cutter version ${CUTTER_VERSION_FULL}")
-add_definitions("-DAPP_VERSION=\"${CUTTER_VERSION_FULL}\"")
 
 
-add_executable(cutter ${UI_FILES} ${QRC_FILES} ${SOURCE_FILES} ${HEADER_FILES})
-qt5_use_modules(cutter Core Widgets Gui Svg)
-target_link_libraries(cutter ${RADARE2_LIBRARIES})
+include(QMakeConfigureFile)
+qmake_configure_file("${CMAKE_CURRENT_SOURCE_DIR}/CutterConfig.h.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/CutterConfig.h")
+
+
+
+add_executable(Cutter ${UI_FILES} ${QRC_FILES} ${SOURCE_FILES} ${HEADER_FILES})
+
+target_link_libraries(Cutter Qt5::Core Qt5::Widgets Qt5::Gui Qt5::Svg Qt5::Network)
+target_link_libraries(Cutter ${RADARE2_LIBRARIES})
 if(CUTTER_ENABLE_JUPYTER)
-    target_link_libraries(cutter ${PYTHON_LIBRARIES})
+    target_link_libraries(Cutter ${PYTHON_LIBRARIES})
     if(CUTTER_ENABLE_QTWEBENGINE)
-        qt5_use_modules(cutter WebEngineWidgets)
+        target_link_libraries(Cutter Qt5::WebEngineWidgets)
     endif()
 endif()
 

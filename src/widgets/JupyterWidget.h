@@ -6,25 +6,25 @@
 
 #include <memory>
 
-#include <QDockWidget>
+#include <QAbstractButton>
 
+#include "CutterDockWidget.h"
 #include "utils/JupyterConnection.h"
 
-namespace Ui
-{
-    class JupyterWidget;
+namespace Ui {
+class JupyterWidget;
 }
 
 class JupyterWebView;
-
 class QTabWidget;
+class MainWindow;
 
-class JupyterWidget : public QDockWidget
+class JupyterWidget : public CutterDockWidget
 {
-Q_OBJECT
+    Q_OBJECT
 
 public:
-    JupyterWidget(QWidget *parent = nullptr, Qt::WindowFlags flags = Qt::WindowFlags());
+    JupyterWidget(MainWindow *main, QAction *action = nullptr);
     ~JupyterWidget();
 
 #ifdef CUTTER_ENABLE_QTWEBENGINE
@@ -35,8 +35,16 @@ private slots:
     void urlReceived(const QString &url);
     void creationFailed();
 
+    void openHomeTab();
+    void tabCloseRequested(int index);
+
 private:
     std::unique_ptr<Ui::JupyterWidget> ui;
+
+    QAbstractButton *homeButton;
+
+    void removeTab(int index);
+    void clearTabs();
 };
 
 #ifdef CUTTER_ENABLE_QTWEBENGINE
@@ -45,7 +53,7 @@ private:
 
 class JupyterWebView : public QWebEngineView
 {
-Q_OBJECT
+    Q_OBJECT
 
 public:
     JupyterWebView(JupyterWidget *mainWidget, QWidget *parent = nullptr);
