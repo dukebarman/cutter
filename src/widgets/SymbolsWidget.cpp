@@ -1,11 +1,12 @@
 #include "SymbolsWidget.h"
-#include "ui_SymbolsWidget.h"
+#include "ui_ListDockWidget.h"
+#include "core/MainWindow.h"
+#include "common/Helpers.h"
 
-#include "MainWindow.h"
-#include "utils/Helpers.h"
+#include <QShortcut>
 
 SymbolsModel::SymbolsModel(QList<SymbolDescription> *symbols, QObject *parent)
-    : QAbstractListModel(parent),
+    : AddressableItemModel<QAbstractListModel>(parent),
       symbols(symbols)
 {
 }
@@ -22,8 +23,9 @@ int SymbolsModel::columnCount(const QModelIndex &) const
 
 QVariant SymbolsModel::data(const QModelIndex &index, int role) const
 {
-    if (index.row() >= symbols->count())
+    if (index.row() >= symbols->count()) {
         return QVariant();
+    }
 
     const SymbolDescription &symbol = symbols->at(index.row());
 
@@ -65,10 +67,21 @@ QVariant SymbolsModel::headerData(int section, Qt::Orientation, int role) const
     }
 }
 
-SymbolsProxyModel::SymbolsProxyModel(SymbolsModel *sourceModel, QObject *parent)
-    : QSortFilterProxyModel(parent)
+RVA SymbolsModel::address(const QModelIndex &index) const
 {
-    setSourceModel(sourceModel);
+    const SymbolDescription &symbol = symbols->at(index.row());
+    return symbol.vaddr;
+}
+
+QString SymbolsModel::name(const QModelIndex &index) const
+{
+    const SymbolDescription &symbol = symbols->at(index.row());
+    return symbol.name;
+}
+
+SymbolsProxyModel::SymbolsProxyModel(SymbolsModel *sourceModel, QObject *parent)
+    : AddressableFilterProxyModel(sourceModel, parent)
+{
     setFilterCaseSensitivity(Qt::CaseInsensitive);
     setSortCaseSensitivity(Qt::CaseInsensitive);
 }
@@ -101,54 +114,20 @@ bool SymbolsProxyModel::lessThan(const QModelIndex &left, const QModelIndex &rig
 }
 
 SymbolsWidget::SymbolsWidget(MainWindow *main, QAction *action) :
-    CutterDockWidget(main, action),
-    ui(new Ui::SymbolsWidget),
-    tree(new CutterTreeWidget(this))
+    ListDockWidget(main, action)
 {
-    ui->setupUi(this);
-
-    // Add Status Bar footer
-    tree->addStatusBar(ui->verticalLayout);
+    setWindowTitle(tr("Symbols"));
+    setObjectName("SymbolsWidget");
 
     symbolsModel = new SymbolsModel(&symbols, this);
     symbolsProxyModel = new SymbolsProxyModel(symbolsModel, this);
-    ui->symbolsTreeView->setModel(symbolsProxyModel);
-    ui->symbolsTreeView->sortByColumn(SymbolsModel::AddressColumn, Qt::AscendingOrder);
+    setModels(symbolsProxyModel);
+    ui->treeView->sortByColumn(SymbolsModel::AddressColumn, Qt::AscendingOrder);
 
-    // Ctrl-F to show/hide the filter entry
-    QShortcut *searchShortcut = new QShortcut(QKeySequence::Find, this);
-    connect(searchShortcut, &QShortcut::activated, ui->quickFilterView, &QuickFilterView::showFilter);
-    searchShortcut->setContext(Qt::WidgetWithChildrenShortcut);
-
-    // Esc to clear the filter entry
-    QShortcut *clearShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
-    connect(clearShortcut, &QShortcut::activated, ui->quickFilterView, &QuickFilterView::clearFilter);
-    clearShortcut->setContext(Qt::WidgetWithChildrenShortcut);
-
-    connect(ui->quickFilterView, SIGNAL(filterTextChanged(const QString &)),
-            symbolsProxyModel, SLOT(setFilterWildcard(const QString &)));
-    connect(ui->quickFilterView, SIGNAL(filterClosed()), ui->symbolsTreeView, SLOT(setFocus()));
-
-    connect(ui->quickFilterView, &QuickFilterView::filterTextChanged, this, [this] {
-        tree->showItemsNumber(symbolsProxyModel->rowCount());
-    });
-    
-    setScrollMode();
-
-    connect(Core(), SIGNAL(refreshAll()), this, SLOT(refreshSymbols()));
+    connect(Core(), &CutterCore::refreshAll, this, &SymbolsWidget::refreshSymbols);
 }
 
 SymbolsWidget::~SymbolsWidget() {}
-
-
-void SymbolsWidget::on_symbolsTreeView_doubleClicked(const QModelIndex &index)
-{
-    if (!index.isValid())
-        return;
-
-    auto symbol = index.data(SymbolsModel::SymbolDescriptionRole).value<SymbolDescription>();
-    Core()->seek(symbol.vaddr);
-}
 
 void SymbolsWidget::refreshSymbols()
 {
@@ -156,12 +135,5 @@ void SymbolsWidget::refreshSymbols()
     symbols = Core()->getAllSymbols();
     symbolsModel->endResetModel();
 
-    qhelpers::adjustColumns(ui->symbolsTreeView, SymbolsModel::ColumnCount, 0);
-
-    tree->showItemsNumber(symbolsProxyModel->rowCount());
-}
-
-void SymbolsWidget::setScrollMode()
-{
-    qhelpers::setVerticalScrollMode(ui->symbolsTreeView);
+    qhelpers::adjustColumns(ui->treeView, SymbolsModel::ColumnCount, 0);
 }

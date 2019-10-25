@@ -1,8 +1,8 @@
 #include "BreakpointWidget.h"
 #include "ui_BreakpointWidget.h"
 #include "dialogs/BreakpointsDialog.h"
-#include "MainWindow.h"
-#include "utils/Helpers.h"
+#include "core/MainWindow.h"
+#include "common/Helpers.h"
 #include <QMenu>
 
 BreakpointModel::BreakpointModel(QList<BreakpointDescription> *breakpoints, QObject *parent)
@@ -122,11 +122,24 @@ BreakpointWidget::BreakpointWidget(MainWindow *main, QAction *action) :
     ui->breakpointTreeView->setModel(breakpointProxyModel);
     ui->breakpointTreeView->sortByColumn(BreakpointModel::AddrColumn, Qt::AscendingOrder);
 
+    refreshDeferrer = createRefreshDeferrer([this]() {
+        refreshBreakpoint();
+    });
+
     setScrollMode();
-    actionDelBreakpoint = new QAction(tr("Delete breakpoint"));
-    actionToggleBreakpoint = new QAction(tr("Toggle breakpoint"));
+ 
+    actionDelBreakpoint = new QAction(tr("Delete breakpoint"), this);
+    actionDelBreakpoint->setShortcut(Qt::Key_Delete);
+    actionDelBreakpoint->setShortcutContext(Qt::WidgetShortcut);
     connect(actionDelBreakpoint, &QAction::triggered, this, &BreakpointWidget::delBreakpoint);
+    ui->breakpointTreeView->addAction(actionDelBreakpoint);
+
+    actionToggleBreakpoint = new QAction(tr("Toggle breakpoint"), this);
+    actionToggleBreakpoint->setShortcut(Qt::Key_Space);
+    actionToggleBreakpoint->setShortcutContext(Qt::WidgetShortcut);
     connect(actionToggleBreakpoint, &QAction::triggered, this, &BreakpointWidget::toggleBreakpoint);
+    ui->breakpointTreeView->addAction(actionToggleBreakpoint);
+
     connect(Core(), &CutterCore::refreshAll, this, &BreakpointWidget::refreshBreakpoint);
     connect(Core(), &CutterCore::breakpointsChanged, this, &BreakpointWidget::refreshBreakpoint);
     connect(Core(), &CutterCore::refreshCodeViews, this, &BreakpointWidget::refreshBreakpoint);
@@ -138,10 +151,14 @@ BreakpointWidget::BreakpointWidget(MainWindow *main, QAction *action) :
             this, SLOT(showBreakpointContextMenu(const QPoint &)));
 }
 
-BreakpointWidget::~BreakpointWidget() {}
+BreakpointWidget::~BreakpointWidget() = default;
 
 void BreakpointWidget::refreshBreakpoint()
 {
+    if (!refreshDeferrer->attemptRefresh(nullptr)) {
+        return;
+    }
+
     breakpointModel->beginResetModel();
     breakpoints = Core()->getBreakpoints();
     breakpointModel->endResetModel();
@@ -160,7 +177,7 @@ void BreakpointWidget::on_breakpointTreeView_doubleClicked(const QModelIndex &in
 {
     BreakpointDescription item = index.data(
                                      BreakpointModel::BreakpointDescriptionRole).value<BreakpointDescription>();
-    Core()->seek(item.addr);
+    Core()->seekAndShow(item.addr);
 }
 
 void BreakpointWidget::showBreakpointContextMenu(const QPoint &pt)
@@ -178,13 +195,13 @@ void BreakpointWidget::showBreakpointContextMenu(const QPoint &pt)
 
 void BreakpointWidget::addBreakpointDialog()
 {
-    BreakpointsDialog *dialog = new BreakpointsDialog(this);
+    BreakpointsDialog dialog(this);
 
-    if (dialog->exec()) {
-        QString bps = dialog->getBreakpoints();
+    if (dialog.exec()) {
+        QString bps = dialog.getBreakpoints();
         if (!bps.isEmpty()) {
-            QStringList bpList = bps.split(" ", QString::SkipEmptyParts);
-            for ( QString bp : bpList) {
+            QStringList bpList = bps.split(QLatin1Char(' '), QString::SkipEmptyParts);
+            for (const QString &bp : bpList) {
                 Core()->toggleBreakpoint(bp);
             }
         }

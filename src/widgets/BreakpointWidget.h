@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "Cutter.h"
+#include "core/Cutter.h"
 #include "CutterDockWidget.h"
 
 #include <QAbstractListModel>
@@ -84,4 +84,6 @@ private:
     QAction *actionToggleBreakpoint = nullptr;
 
     void setScrollMode();
+
+    RefreshDeferrer *refreshDeferrer;
 };

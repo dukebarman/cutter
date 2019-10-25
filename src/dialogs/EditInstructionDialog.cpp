@@ -1,11 +1,11 @@
 #include "EditInstructionDialog.h"
 #include "ui_EditInstructionDialog.h"
-#include "Cutter.h"
+#include "core/Cutter.h"
 
-EditInstructionDialog::EditInstructionDialog(QWidget *parent, bool isEditingBytes) :
+EditInstructionDialog::EditInstructionDialog(InstructionEditMode editMode, QWidget *parent) :
     QDialog(parent),
     ui(new Ui::EditInstructionDialog),
-    isEditingBytes(isEditingBytes)
+    editMode(editMode)
 {
     ui->setupUi(this);
     setWindowFlags(windowFlags() & (~Qt::WindowContextHelpButtonHint));
@@ -25,10 +25,9 @@ void EditInstructionDialog::on_buttonBox_rejected()
     close();
 }
 
-QString EditInstructionDialog::getInstruction()
+QString EditInstructionDialog::getInstruction() const
 {
-    QString ret = ui->lineEdit->text();
-    return ret;
+    return ui->lineEdit->text();
 }
 
 void EditInstructionDialog::setInstruction(const QString &instruction)
@@ -40,13 +39,19 @@ void EditInstructionDialog::setInstruction(const QString &instruction)
 void EditInstructionDialog::updatePreview(const QString &input)
 {
     QString result;
-    if (isEditingBytes) {
-        result = Core()->disassemble(input).trimmed();
-    } else {
-        result = Core()->assemble(input).trimmed();
+
+    if (editMode == EDIT_NONE) {
+        ui->instructionLabel->setText("");
+        return;
+    } else if (editMode == EDIT_BYTES) {
+        QByteArray data = CutterCore::hexStringToBytes(input);
+        result = Core()->disassemble(data).trimmed();
+    } else if (editMode == EDIT_TEXT) {
+        QByteArray data = Core()->assemble(input);
+        result = CutterCore::bytesToHexString(data).trimmed();
     }
 
-    if (result.isEmpty() || result.contains("\n")) {
+    if (result.isEmpty() || result.contains(QLatin1Char('\n'))) {
         ui->instructionLabel->setText("Unknown Instruction");
     } else {
         ui->instructionLabel->setText(result);

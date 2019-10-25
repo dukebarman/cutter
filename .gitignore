@@ -1,5 +1,4 @@
 # Binaries
-Cutter
 AStyle*
 
 # OSX files
@@ -66,6 +65,12 @@ __pycache__
 
 # Other
 compile_commands.json
+.ccls-cache
 
 # vscode
 **/.vscode
+
+# cutter-deps
+/cutter-deps
+
+/breakpad

@@ -1,9 +1,11 @@
 #include "RegisterRefsWidget.h"
 #include "ui_RegisterRefsWidget.h"
-#include "MainWindow.h"
-#include "utils/Helpers.h"
+#include "core/MainWindow.h"
+#include "common/Helpers.h"
+
 #include <QMenu>
 #include <QClipboard>
+#include <QShortcut>
 
 RegisterRefModel::RegisterRefModel(QList<RegisterRefDescription> *registerRefs, QObject *parent)
     : QAbstractListModel(parent),
@@ -116,8 +118,12 @@ RegisterRefsWidget::RegisterRefsWidget(MainWindow *main, QAction *action) :
     ui->registerRefTreeView->setModel(registerRefProxyModel);
     ui->registerRefTreeView->sortByColumn(RegisterRefModel::RegColumn, Qt::AscendingOrder);
 
-    actionCopyValue = new QAction(tr("Copy register value"));
-    actionCopyRef = new QAction(tr("Copy register reference"));
+    actionCopyValue = new QAction(tr("Copy register value"), this);
+    actionCopyRef = new QAction(tr("Copy register reference"), this);
+
+    refreshDeferrer = createRefreshDeferrer([this](){
+        refreshRegisterRef();
+    });
 
     // Ctrl-F to show/hide the filter entry
     QShortcut *search_shortcut = new QShortcut(QKeySequence::Find, this);
@@ -145,10 +151,14 @@ RegisterRefsWidget::RegisterRefsWidget(MainWindow *main, QAction *action) :
     });
 }
 
-RegisterRefsWidget::~RegisterRefsWidget() {}
+RegisterRefsWidget::~RegisterRefsWidget() = default;
 
 void RegisterRefsWidget::refreshRegisterRef()
 {
+    if (!refreshDeferrer->attemptRefresh(nullptr)) {
+        return;
+    }
+
     registerRefModel->beginResetModel();
     registerRefs = Core()->getRegisterRefs();
     registerRefModel->endResetModel();
@@ -169,7 +179,7 @@ void RegisterRefsWidget::on_registerRefTreeView_doubleClicked(const QModelIndex 
 {
     RegisterRefDescription item = index.data(
                                       RegisterRefModel::RegisterRefDescriptionRole).value<RegisterRefDescription>();
-    Core()->seek(item.value);
+    Core()->seekAndShow(item.value);
 }
 
 void RegisterRefsWidget::showRegRefContextMenu(const QPoint &pt)

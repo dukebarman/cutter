@@ -1,8 +1,8 @@
 #include "BacktraceWidget.h"
 #include "ui_BacktraceWidget.h"
-#include "utils/JsonModel.h"
+#include "common/JsonModel.h"
 
-#include "MainWindow.h"
+#include "core/MainWindow.h"
 
 BacktraceWidget::BacktraceWidget(MainWindow *main, QAction *action) :
     CutterDockWidget(main, action),
@@ -23,6 +23,10 @@ BacktraceWidget::BacktraceWidget(MainWindow *main, QAction *action) :
     viewBacktrace->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     ui->verticalLayout->addWidget(viewBacktrace);
 
+    refreshDeferrer = createRefreshDeferrer([this]() {
+        updateContents();
+    });
+
     connect(Core(), &CutterCore::refreshAll, this, &BacktraceWidget::updateContents);
     connect(Core(), &CutterCore::seekChanged, this, &BacktraceWidget::updateContents);
     connect(Config(), &Configuration::fontsUpdated, this, &BacktraceWidget::fontsUpdatedSlot);
@@ -32,6 +36,9 @@ BacktraceWidget::~BacktraceWidget() {}
 
 void BacktraceWidget::updateContents()
 {
+    if (!refreshDeferrer->attemptRefresh(nullptr)) {
+        return;
+    }
     setBacktraceGrid();
 }
 
@@ -39,7 +46,7 @@ void BacktraceWidget::setBacktraceGrid()
 {
     QJsonArray backtraceValues = Core()->getBacktrace().array();
     int i = 0;
-    for (QJsonValueRef value : backtraceValues) {
+    for (const QJsonValue &value : backtraceValues) {
         QJsonObject backtraceItem = value.toObject();
         QString progCounter = RAddressString(backtraceItem["pc"].toVariant().toULongLong());
         QString stackPointer = RAddressString(backtraceItem["sp"].toVariant().toULongLong());

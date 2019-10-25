@@ -1,8 +1,14 @@
+#include "common/PythonManager.h"
+#include "common/CrashHandler.h"
 #include "CutterApplication.h"
+#include "plugins/PluginManager.h"
+#include "CutterConfig.h"
+#include "common/Decompiler.h"
 
 #include <QApplication>
 #include <QFileOpenEvent>
 #include <QEvent>
+#include <QMenu>
 #include <QMessageBox>
 #include <QCommandLineParser>
 #include <QTextCodec>
@@ -10,21 +16,52 @@
 #include <QProcess>
 #include <QPluginLoader>
 #include <QDir>
+#include <QTranslator>
+#include <QLibraryInfo>
+#include <QFontDatabase>
+#ifdef Q_OS_WIN
+#include <QtNetwork/QtNetwork>
+#endif // Q_OS_WIN
 
-#ifdef CUTTER_ENABLE_JUPYTER
-#include "utils/JupyterConnection.h"
+#include <cstdlib>
+
+#if CUTTER_R2GHIDRA_STATIC
+#include <R2GhidraDecompiler.h>
 #endif
-#include "plugins/CutterPlugin.h"
-
-#include "CutterConfig.h"
 
 CutterApplication::CutterApplication(int &argc, char **argv) : QApplication(argc, argv)
 {
-    setOrganizationName("Cutter");
-    setApplicationName("Cutter");
+    // Setup application information
     setApplicationVersion(CUTTER_VERSION_FULL);
     setWindowIcon(QIcon(":/img/cutter.svg"));
     setAttribute(Qt::AA_DontShowIconsInMenus);
+    setAttribute(Qt::AA_UseHighDpiPixmaps);
+    setLayoutDirection(Qt::LeftToRight);
+
+    // WARN!!! Put initialization code below this line. Code above this line is mandatory to be run First
+
+#ifdef Q_OS_WIN
+    // Hack to force Cutter load internet connection related DLL's
+    QSslSocket s;
+    s.sslConfiguration();
+#endif // Q_OS_WIN
+
+    // Load translations
+    if (!loadTranslations()) {
+        qWarning() << "Cannot load translations";
+    }
+
+    // Load fonts
+    int ret = QFontDatabase::addApplicationFont(":/fonts/Anonymous Pro.ttf");
+    if (ret == -1) {
+        qWarning() << "Cannot load Anonymous Pro font.";
+    }
+
+    ret = QFontDatabase::addApplicationFont(":/fonts/Inconsolata-Regular.ttf");
+    if (ret == -1) {
+        qWarning() << "Cannot load Incosolata-Regular font.";
+    }
+
 
     // Set QString codec to UTF-8
     QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
@@ -49,11 +86,9 @@ CutterApplication::CutterApplication(int &argc, char **argv) : QApplication(argc
                                     QObject::tr("file"));
     cmd_parser.addOption(scriptOption);
 
-#ifdef CUTTER_ENABLE_JUPYTER
-    QCommandLineOption pythonHomeOption("pythonhome", QObject::tr("PYTHONHOME to use for Jupyter"),
+    QCommandLineOption pythonHomeOption("pythonhome", QObject::tr("PYTHONHOME to use for embeded python interpreter"),
                                         "PYTHONHOME");
     cmd_parser.addOption(pythonHomeOption);
-#endif
 
     cmd_parser.process(*this);
 
@@ -70,21 +105,39 @@ CutterApplication::CutterApplication(int &argc, char **argv) : QApplication(argc
         msg.setText(QString(
                         QObject::tr("The version used to compile Cutter (%1) does not match the binary version of radare2 (%2). This could result in unexpected behaviour. Are you sure you want to continue?")).arg(
                         localVersion, r2version));
-        if (msg.exec() == QMessageBox::No)
-            exit(1);
+        if (msg.exec() == QMessageBox::No) {
+            std::exit(1);
+        }
     }
 
-#ifdef CUTTER_ENABLE_JUPYTER
+#ifdef CUTTER_ENABLE_PYTHON
+    // Init python
     if (cmd_parser.isSet(pythonHomeOption)) {
-        Jupyter()->setPythonHome(cmd_parser.value(pythonHomeOption));
+        Python()->setPythonHome(cmd_parser.value(pythonHomeOption));
     }
+    Python()->initialize();
+#endif
+
+#ifdef Q_OS_WIN
+    // Redefine r_sys_prefix() behaviour
+    qputenv("R_ALT_SRC_DIR", "1");
+#endif
+
+    Core()->initialize();
+    Core()->setSettings();
+    Config()->loadInitial();
+    Core()->loadCutterRC();
+
+    if (R2DecDecompiler::isAvailable()) {
+        Core()->registerDecompiler(new R2DecDecompiler(Core()));
+    }
+
+#if CUTTER_R2GHIDRA_STATIC
+    Core()->registerDecompiler(new R2GhidraDecompiler(Core()));
 #endif
 
     bool analLevelSpecified = false;
     int analLevel = 0;
-
-    // Initialize CutterCore and set default settings
-    Core()->setSettings();
 
     if (cmd_parser.isSet(analOption)) {
         analLevel = cmd_parser.value(analOption).toInt(&analLevelSpecified);
@@ -92,20 +145,36 @@ CutterApplication::CutterApplication(int &argc, char **argv) : QApplication(argc
         if (!analLevelSpecified || analLevel < 0 || analLevel > 2) {
             printf("%s\n",
                    QObject::tr("Invalid Analysis Level. May be a value between 0 and 2.").toLocal8Bit().constData());
-            exit(1);
+            std::exit(1);
         }
+    }
+
+    Plugins()->loadPlugins();
+
+    for (auto *plugin : Plugins()->getPlugins()) {
+        plugin->registerDecompilers();
     }
 
     mainWindow = new MainWindow();
     installEventFilter(mainWindow);
 
+    // set up context menu shortcut display fix
+#if QT_VERSION_CHECK(5, 10, 0) < QT_VERSION
+    setStyle(new CutterProxyStyle());
+#endif // QT_VERSION_CHECK(5, 10, 0) < QT_VERSION
+
     if (args.empty()) {
         if (analLevelSpecified) {
             printf("%s\n",
                    QObject::tr("Filename must be specified to start analysis automatically.").toLocal8Bit().constData());
-            exit(1);
+            std::exit(1);
         }
 
+        // check if this is the first execution of Cutter in this computer
+        // Note: the execution after the preferences benn reset, will be considered as first-execution
+        if (Config()->isFirstExecution()) {
+            mainWindow->displayWelcomeDialog();
+        }
         mainWindow->displayNewFileDialog();
     } else { // filename specified as positional argument
         InitialOptions options;
@@ -117,10 +186,10 @@ CutterApplication::CutterApplication(int &argc, char **argv) : QApplication(argc
                 options.analCmd = {};
                 break;
             case 1:
-                options.analCmd = { "aaa" };
+                options.analCmd = { {"aaa", "Auto analysis"} };
                 break;
             case 2:
-                options.analCmd = { "aaaa" };
+                options.analCmd = { {"aaaa", "Auto analysis (experimental)"} };
                 break;
             }
         }
@@ -128,13 +197,46 @@ CutterApplication::CutterApplication(int &argc, char **argv) : QApplication(argc
         mainWindow->openNewFile(options, analLevelSpecified);
     }
 
-    // Load plugins
-    loadPlugins();
+#ifdef CUTTER_APPVEYOR_R2DEC
+    qputenv("R2DEC_HOME", "radare2\\lib\\plugins\\r2dec-js");
+#endif
+
+#ifdef APPIMAGE
+    {
+        auto sleighHome = QDir(QCoreApplication::applicationDirPath()); // appdir/bin
+        sleighHome.cdUp(); // appdir
+        sleighHome.cd("share/radare2/plugins/r2ghidra_sleigh"); // appdir/share/radare2/plugins/r2ghidra_sleigh
+        Core()->setConfig("r2ghidra.sleighhome", sleighHome.absolutePath());
+    }
+#endif
+
+#ifdef Q_OS_MACOS
+    {
+        auto sleighHome = QDir(QCoreApplication::applicationDirPath()); // Contents/MacOS
+        sleighHome.cdUp(); // Contents
+        sleighHome.cd("Resources/r2/share/radare2/plugins/r2ghidra_sleigh"); // Contents/Resources/r2/share/radare2/plugins/r2ghidra_sleigh
+        Core()->setConfig("r2ghidra.sleighhome", sleighHome.absolutePath());
+    }
+#endif
+
+#ifdef Q_OS_WIN
+    {
+        auto sleighHome = QDir(QCoreApplication::applicationDirPath());
+        sleighHome.cd("radare2/lib/plugins/r2ghidra_sleigh");
+        Core()->setConfig("r2ghidra.sleighhome", sleighHome.absolutePath());
+    }
+#endif
 }
 
 CutterApplication::~CutterApplication()
 {
+#ifdef CUTTER_ENABLE_PYTHON
+    Plugins()->destroyPlugins();
+#endif
     delete mainWindow;
+#ifdef CUTTER_ENABLE_PYTHON
+    Python()->shutdown();
+#endif
 }
 
 bool CutterApplication::event(QEvent *e)
@@ -163,32 +265,78 @@ bool CutterApplication::event(QEvent *e)
     return QApplication::event(e);
 }
 
-void CutterApplication::loadPlugins()
+bool CutterApplication::loadTranslations()
 {
-    QList<CutterPlugin *> plugins;
-    QDir pluginsDir(qApp->applicationDirPath());
-#if defined(Q_OS_WIN)
-    if (pluginsDir.dirName().toLower() == "debug" || pluginsDir.dirName().toLower() == "release")
-        pluginsDir.cdUp();
-#elif defined(Q_OS_MAC)
-    if (pluginsDir.dirName() == "MacOS") {
-        pluginsDir.cdUp();
-        pluginsDir.cdUp();
-        pluginsDir.cdUp();
+    const QString &language = Config()->getCurrLocale().bcp47Name();
+    if (language == QStringLiteral("en") || language.startsWith(QStringLiteral("en-"))) {
+        return true;
     }
-#endif
-    pluginsDir.cd("plugins");
-    foreach (QString fileName, pluginsDir.entryList(QDir::Files)) {
-        QPluginLoader pluginLoader(pluginsDir.absoluteFilePath(fileName));
-        QObject *plugin = pluginLoader.instance();
-        if (plugin) {
-            CutterPlugin *cutterPlugin = qobject_cast<CutterPlugin *>(plugin);
-            if (cutterPlugin) {
-                cutterPlugin->setupPlugin(Core());
-                plugins.append(cutterPlugin);
+    const auto &allLocales = QLocale::matchingLocales(QLocale::AnyLanguage, QLocale::AnyScript,
+        QLocale::AnyCountry);
+
+    bool cutterTrLoaded = false;
+
+    for (const QLocale &it : allLocales) {
+        const QString &langPrefix = it.bcp47Name();
+        if (langPrefix == language) {
+            QApplication::setLayoutDirection(it.textDirection());
+            QLocale::setDefault(it);
+
+            QTranslator *trCutter = new QTranslator;
+            QTranslator *trQtBase = new QTranslator;
+            QTranslator *trQt = new QTranslator;
+
+            const QStringList &cutterTrPaths = Config()->getTranslationsDirectories();
+
+            for (const auto &trPath : cutterTrPaths) {
+                if (trCutter && trCutter->load(it, QLatin1String("cutter"), QLatin1String("_"), trPath)) {
+                    installTranslator(trCutter);
+                    cutterTrLoaded = true;
+                    trCutter = nullptr;
+                }
+                if (trQt && trQt->load(it, "qt", "_", trPath)) {
+                    installTranslator(trQt);
+                    trQt = nullptr;
+                }
+
+                if (trQtBase && trQtBase->load(it, "qtbase", "_", trPath)) {
+                    installTranslator(trQtBase);
+                    trQtBase = nullptr;
+                }
             }
+
+            if (trCutter) {
+                delete trCutter;
+            }
+            if (trQt) {
+                delete trQt;
+            }
+            if (trQtBase) {
+                delete trQtBase;
+            }
+            return true;
         }
     }
-
-    Core()->setCutterPlugins(plugins);
+    if (!cutterTrLoaded) {
+        qWarning() << "Cannot load Cutter's translation for " << language;
+    }
+    return false;
 }
+
+
+void CutterProxyStyle::polish(QWidget *widget)
+{
+    QProxyStyle::polish(widget);
+#if QT_VERSION_CHECK(5, 10, 0) < QT_VERSION
+    // HACK: This is the only way I've found to force Qt (5.10 and newer) to
+    //       display shortcuts in context menus on all platforms. It's ugly,
+    //       but it gets the job done.
+    if (auto menu = qobject_cast<QMenu*>(widget)) {
+        const auto &actions = menu->actions();
+        for (auto action : actions) {
+            action->setShortcutVisibleInContextMenu(true);
+        }
+    }
+#endif // QT_VERSION_CHECK(5, 10, 0) < QT_VERSION
+}
+

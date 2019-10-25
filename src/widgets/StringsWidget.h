@@ -3,10 +3,11 @@
 
 #include <memory>
 
-#include "Cutter.h"
+#include "core/Cutter.h"
 #include "CutterDockWidget.h"
-#include "utils/StringsTask.h"
+#include "common/StringsTask.h"
 #include "CutterTreeWidget.h"
+#include "AddressableItemModel.h"
 
 #include <QAbstractListModel>
 #include <QSortFilterProxyModel>
@@ -19,7 +20,7 @@ namespace Ui {
 class StringsWidget;
 }
 
-class StringsModel: public QAbstractListModel
+class StringsModel: public AddressableItemModel<QAbstractListModel>
 {
     Q_OBJECT
 
@@ -29,30 +30,36 @@ private:
     QList<StringDescription> *strings;
 
 public:
-    enum Columns { OFFSET = 0, STRING, TYPE, LENGTH, SIZE, COUNT };
+    enum Column { OffsetColumn = 0, StringColumn, TypeColumn, LengthColumn, SizeColumn, SectionColumn, ColumnCount };
     static const int StringDescriptionRole = Qt::UserRole;
 
     StringsModel(QList<StringDescription> *strings, QObject *parent = nullptr);
 
-    int rowCount(const QModelIndex &parent = QModelIndex()) const;
-    int columnCount(const QModelIndex &parent = QModelIndex()) const;
+    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
 
-    QVariant data(const QModelIndex &index, int role) const;
-    QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const;
+    QVariant data(const QModelIndex &index, int role) const override;
+    QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
+
+    RVA address(const QModelIndex &index) const override;
 };
 
 
 
-class StringsSortFilterProxyModel : public QSortFilterProxyModel
+class StringsProxyModel : public AddressableFilterProxyModel
 {
     Q_OBJECT
 
+    friend StringsWidget;
+
 public:
-    StringsSortFilterProxyModel(StringsModel *source_model, QObject *parent = nullptr);
+    StringsProxyModel(StringsModel *sourceModel, QObject *parent = nullptr);
 
 protected:
     bool filterAcceptsRow(int row, const QModelIndex &parent) const override;
     bool lessThan(const QModelIndex &left, const QModelIndex &right) const override;
+
+    QString selectedSection;
 };
 
 
@@ -65,10 +72,11 @@ public:
     ~StringsWidget();
 
 private slots:
-    void on_stringsTreeView_doubleClicked(const QModelIndex &index);
-
     void refreshStrings();
     void stringSearchFinished(const QList<StringDescription> &strings);
+    void refreshSectionCombo();
+
+    void on_actionCopy();
 
 private:
     std::unique_ptr<Ui::StringsWidget> ui;
@@ -76,7 +84,7 @@ private:
     QSharedPointer<StringsTask> task;
 
     StringsModel *model;
-    StringsSortFilterProxyModel *proxy_model;
+    StringsProxyModel *proxyModel;
     QList<StringDescription> strings;
     CutterTreeWidget *tree;
 };

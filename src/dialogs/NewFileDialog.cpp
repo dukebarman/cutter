@@ -1,9 +1,10 @@
 #include "InitialOptionsDialog.h"
-#include "MainWindow.h"
+#include "core/MainWindow.h"
 #include "dialogs/NewFileDialog.h"
 #include "dialogs/AboutDialog.h"
 #include "ui_NewfileDialog.h"
-#include "utils/Helpers.h"
+#include "common/Helpers.h"
+#include "common/HighDpiPixmap.h"
 
 #include <QFileDialog>
 #include <QtGui>
@@ -14,20 +15,17 @@
 
 const int NewFileDialog::MaxRecentFiles;
 
-static QColor getColorFor(const QString &str, int pos)
+static QColor getColorFor(int pos)
 {
-    Q_UNUSED(str);
-
-    QList<QColor> Colors;
-    Colors << QColor(29, 188, 156); // Turquoise
-    Colors << QColor(52, 152, 219); // Blue
-    Colors << QColor(155, 89, 182); // Violet
-    Colors << QColor(52, 73, 94);   // Grey
-    Colors << QColor(231, 76, 60);  // Red
-    Colors << QColor(243, 156, 17); // Orange
-
-    return Colors[pos % 6];
-
+    static const QList<QColor> colors = {
+        QColor(29, 188, 156), // Turquoise
+        QColor(52, 152, 219), // Blue
+        QColor(155, 89, 182), // Violet
+        QColor(52, 73, 94),   // Grey
+        QColor(231, 76, 60),  // Red
+        QColor(243, 156, 17)  // Orange
+    };
+    return colors[pos % colors.size()];
 }
 
 static QIcon getIconFor(const QString &str, int pos)
@@ -36,23 +34,27 @@ static QIcon getIconFor(const QString &str, int pos)
     int w = 64;
     int h = 64;
 
-    QPixmap pixmap(w, h);
+    HighDpiPixmap pixmap(w, h);
     pixmap.fill(Qt::transparent);
 
     QPainter pixPaint(&pixmap);
     pixPaint.setPen(Qt::NoPen);
     pixPaint.setRenderHint(QPainter::Antialiasing);
-    pixPaint.setBrush(QBrush(QBrush(getColorFor(str, pos))));
+    pixPaint.setBrush(getColorFor(pos));
     pixPaint.drawEllipse(1, 1, w - 2, h - 2);
     pixPaint.setPen(Qt::white);
-    pixPaint.setFont(QFont("Verdana", 24, 1));
+    QFont font = Config()->getBaseFont();
+    font.setBold(true);
+    font.setPointSize(18);
+    pixPaint.setFont(font);
     pixPaint.drawText(0, 0, w, h - 2, Qt::AlignCenter, QString(str).toUpper().mid(0, 2));
     return QIcon(pixmap);
 }
 
-NewFileDialog::NewFileDialog(QWidget *parent) :
-    QDialog(parent),
-    ui(new Ui::NewFileDialog)
+NewFileDialog::NewFileDialog(MainWindow *main) :
+    QDialog(nullptr), // no parent on purpose, using main causes weird positioning
+    ui(new Ui::NewFileDialog),
+    main(main)
 {
     ui->setupUi(this);
     setWindowFlags(windowFlags() & (~Qt::WindowContextHelpButtonHint));
@@ -61,6 +63,9 @@ NewFileDialog::NewFileDialog(QWidget *parent) :
     ui->recentsListWidget->addAction(ui->actionClear_all);
     ui->projectsListWidget->addAction(ui->actionRemove_project);
     ui->logoSvgWidget->load(Config()->getLogoFile());
+
+    // radare2 does not seem to save this config so here we load this manually
+    Core()->setConfig("dir.projects", Config()->getDirProjects());
 
     fillRecentFilesList();
     fillIOPluginsList();
@@ -84,37 +89,41 @@ void NewFileDialog::on_loadFileButton_clicked()
 
 void NewFileDialog::on_selectFileButton_clicked()
 {
-    QString fileName = QFileDialog::getOpenFileName(this, tr("Select file"), QDir::homePath());
+    QString currentDir = Config()->getRecentFolder();
+    const QString &fileName = QDir::toNativeSeparators(QFileDialog::getOpenFileName(this,
+                                                                                    tr("Select file"), currentDir));
 
     if (!fileName.isEmpty()) {
         ui->newFileEdit->setText(fileName);
         ui->loadFileButton->setFocus();
+        Config()->setRecentFolder(QFileInfo(fileName).absolutePath());
     }
 }
 
 void NewFileDialog::on_selectProjectsDirButton_clicked()
 {
-    QFileDialog dialog(this);
-    dialog.setFileMode(QFileDialog::DirectoryOnly);
-
     auto currentDir = Config()->getDirProjects();
 
     if (currentDir.startsWith("~")) {
         currentDir = QDir::homePath() + currentDir.mid(1);
     }
-    dialog.setDirectory(currentDir);
+    const QString &dir = QDir::toNativeSeparators(QFileDialog::getExistingDirectory(this,
+                                                                                    tr("Select project path (dir.projects)"),
+                                                                                    currentDir));
 
-    dialog.setWindowTitle(tr("Select project path (dir.projects)"));
-
-    if (!dialog.exec()) {
+    if (dir.isEmpty()) {
+        return;
+    }
+    if (!QFileInfo(dir).isWritable()) {
+        QMessageBox::critical(this, tr("Permission denied"),
+                              tr("You do not have write access to <b>%1</b>")
+                              .arg(dir));
         return;
     }
 
-    QString dir = dialog.selectedFiles().first();
-    if (!dir.isEmpty()) {
-        Config()->setDirProjects(dir);
-        fillProjectsList();
-    }
+    Config()->setDirProjects(dir);
+    Core()->setConfig("dir.projects", dir);
+    fillProjectsList();
 }
 
 void NewFileDialog::on_loadProjectButton_clicked()
@@ -169,6 +178,7 @@ void NewFileDialog::on_projectsListWidget_itemDoubleClicked(QListWidgetItem *ite
 void NewFileDialog::on_aboutButton_clicked()
 {
     AboutDialog *a = new AboutDialog(this);
+    a->setAttribute(Qt::WA_DeleteOnClose);
     a->open();
 }
 
@@ -265,26 +275,27 @@ bool NewFileDialog::fillRecentFilesList()
     QMutableListIterator<QString> it(files);
     int i = 0;
     while (it.hasNext()) {
-        const QString &file = it.next();
-        // Get stored files
-
-        // Remove all but the file name
-        const QString sep = QDir::separator();
-        const QStringList name_list = file.split(sep);
-        const QString name = name_list.last();
-
+        // Get the file name
+        const QString &fullpath = QDir::toNativeSeparators(it.next());
+        const QString homepath = QDir::homePath();
+        const QString basename = fullpath.section(QDir::separator(), -1);
+        QString filenameHome = fullpath;
+        filenameHome.replace(homepath, "~");
+        filenameHome.replace(basename, "");
+        filenameHome.chop(1); // Remove last character that will be a path separator
         // Get file info
-        QFileInfo info(file);
+        QFileInfo info(fullpath);
         if (!info.exists()) {
             it.remove();
         } else {
+            // Format the text and add the item to the file list
+            const QString text = QString("%1\n%2\nSize: %3").arg(basename, filenameHome,
+                                                                 qhelpers::formatBytecount(info.size()));
             QListWidgetItem *item = new QListWidgetItem(
-                getIconFor(name, i++),
-                file + "\nCreated: " + info.created().toString() + "\nSize: " + qhelpers::formatBytecount(
-                    info.size())
+                getIconFor(basename, i++),
+                text
             );
-            //":/img/icons/target.svg"), name );
-            item->setData(Qt::UserRole, file);
+            item->setData(Qt::UserRole, fullpath);
             ui->recentsListWidget->addItem(item);
         }
     }
@@ -310,7 +321,7 @@ bool NewFileDialog::fillProjectsList()
 
     int i = 0;
     for (const QString &project : projects) {
-        QString info = core->cmd("Pi " + project);
+        QString info = QDir::toNativeSeparators(core->cmd("Pi " + project));
 
         QListWidgetItem *item = new QListWidgetItem(getIconFor(project, i++), project + "\n" + info);
 
@@ -324,25 +335,32 @@ bool NewFileDialog::fillProjectsList()
 void NewFileDialog::fillIOPluginsList()
 {
     ui->ioPlugin->clear();
-    ui->ioPlugin->addItem("");
+    ui->ioPlugin->addItem("file://");
     ui->ioPlugin->setItemData(0, tr("Open a file with no extra treatment."), Qt::ToolTipRole);
 
     int index = 1;
     QList<RIOPluginDescription> ioPlugins = Core()->getRIOPluginDescriptions();
-    for (RIOPluginDescription plugin : ioPlugins) {
+    for (const RIOPluginDescription &plugin : ioPlugins) {
         // Hide debug plugins
         if (plugin.permissions.contains('d')) {
             continue;
         }
-        ui->ioPlugin->addItem(plugin.name);
-        ui->ioPlugin->setItemData(index, plugin.description, Qt::ToolTipRole);
-        index++;
+        const auto &uris = plugin.uris;
+        for (const auto &uri : uris) {
+            if (uri == "file://") {
+                continue;
+            }
+            ui->ioPlugin->addItem(uri);
+            ui->ioPlugin->setItemData(index, plugin.description, Qt::ToolTipRole);
+            index++;
+        }
     }
 }
 
 void NewFileDialog::loadFile(const QString &filename)
 {
-    if (ui->ioPlugin->currentIndex() == 0 && !Core()->tryFile(filename, false)
+    const QString &nativeFn = QDir::toNativeSeparators(filename);
+    if (ui->ioPlugin->currentIndex() == 0 && !Core()->tryFile(nativeFn, false)
             && !ui->checkBox_FilelessOpen->isChecked()) {
         QMessageBox msgBox(this);
         msgBox.setText(tr("Select a new program or a previous one before continuing."));
@@ -353,23 +371,22 @@ void NewFileDialog::loadFile(const QString &filename)
     // Add file to recent file list
     QSettings settings;
     QStringList files = settings.value("recentFileList").toStringList();
-    files.removeAll(filename);
-    files.prepend(filename);
+    files.removeAll(nativeFn);
+    files.prepend(nativeFn);
     while (files.size() > MaxRecentFiles)
         files.removeLast();
 
     settings.setValue("recentFileList", files);
 
     // Close dialog and open MainWindow/InitialOptionsDialog
-    MainWindow *main = new MainWindow();
     QString ioFile = "";
     if (ui->ioPlugin->currentIndex()) {
-        ioFile = ui->ioPlugin->currentText() + "://";
+        ioFile = ui->ioPlugin->currentText();
     }
-    ioFile += filename;
+    ioFile += nativeFn;
     InitialOptions options;
     options.filename = ioFile;
-    main->openNewFile(options);
+    main->openNewFile(options, ui->checkBox_FilelessOpen->isChecked());
 
     close();
 }

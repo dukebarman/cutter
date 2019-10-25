@@ -1,8 +1,8 @@
 #include <QShortcut>
 #include <QModelIndex>
 
-#include "MainWindow.h"
-#include "utils/Helpers.h"
+#include "core/MainWindow.h"
+#include "common/Helpers.h"
 
 #include "VTablesWidget.h"
 #include "ui_VTablesWidget.h"
@@ -39,7 +39,7 @@ QVariant VTableModel::data(const QModelIndex &index, int role) const
 {
     QModelIndex parent = index.parent();
     if (parent.isValid()) {
-        const ClassMethodDescription &res = vtables->at(parent.row()).methods.at(index.row());
+        const BinClassMethodDescription &res = vtables->at(parent.row()).methods.at(index.row());
         switch (role) {
         case Qt::DisplayRole:
             switch (index.column()) {
@@ -59,7 +59,7 @@ QVariant VTableModel::data(const QModelIndex &index, int role) const
         case Qt::DisplayRole:
             switch (index.column()) {
             case NAME:
-                return tr("VTable ") + QString::number(index.row() + 1);
+                return tr("VTable") + " " + QString::number(index.row() + 1);
             case ADDRESS:
                 return RAddressString(vtables->at(index.row()).addr);
             }
@@ -86,6 +86,7 @@ QVariant VTableModel::headerData(int section, Qt::Orientation, int role) const
         default:
             break;
         }
+        break;
     default:
         break;
     }
@@ -137,7 +138,7 @@ VTablesWidget::VTablesWidget(MainWindow *main, QAction *action) :
     tree->addStatusBar(ui->verticalLayout);
 
     model = new VTableModel(&vtables, this);
-    proxy = new VTableSortFilterProxyModel(model);
+    proxy = new VTableSortFilterProxyModel(model, this);
 
     ui->vTableTreeView->setModel(proxy);
     ui->vTableTreeView->sortByColumn(VTableModel::ADDRESS, Qt::AscendingOrder);
@@ -145,6 +146,7 @@ VTablesWidget::VTablesWidget(MainWindow *main, QAction *action) :
     // Esc to clear the filter entry
     QShortcut *clear_shortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
     connect(clear_shortcut, &QShortcut::activated, ui->quickFilterView, &QuickFilterView::clearFilter);
+    clear_shortcut->setContext(Qt::WidgetWithChildrenShortcut);
 
     // Ctrl-F to show/hide the filter entry
     QShortcut *search_shortcut = new QShortcut(QKeySequence::Find, this);
@@ -181,14 +183,16 @@ void VTablesWidget::refreshVTables()
 
 void VTablesWidget::on_vTableTreeView_doubleClicked(const QModelIndex &index)
 {
-    if (!index.isValid())
+    if (!index.isValid()) {
         return;
+    }
 
     QModelIndex parent = index.parent();
-    if (parent.isValid())
-        Core()->seek(index.data(
-                         VTableModel::VTableDescriptionRole).value<ClassMethodDescription>().addr);
-    else
-        Core()->seek(index.data(
+    if (parent.isValid()) {
+        Core()->seekAndShow(index.data(
+                         VTableModel::VTableDescriptionRole).value<BinClassMethodDescription>().addr);
+    } else {
+        Core()->seekAndShow(index.data(
                          VTableModel::VTableDescriptionRole).value<VTableDescription>().addr);
+    }
 }
